@@ -13,7 +13,7 @@ class Database:
         self.samples = []
 
     def read_dataset(self):
-        for item in os.listdir(self.parent_dir):
+        for item in sorted(os.listdir(self.parent_dir)):
             item_path = os.path.join(self.parent_dir, item)
             if os.path.isdir(item_path):
                 self.add_new_sample(item_path)
@@ -44,7 +44,7 @@ class Database:
             # classifying all file names based on their extension, dividing them into slices and lesions files
             slices_files = []
             lesions_files = []
-            for file_name in os.listdir(directory):
+            for file_name in sorted(os.listdir(directory)):
                 if file_name.endswith(".TIF") or file_name.endswith(".bmp"):
                     slices_files.append(file_name)
                 elif file_name.endswith(".plq"):

@@ -8,9 +8,6 @@ def show_single_slice(slice_mri: MRISlice, slice_number, total_slices_number, wi
     lesions = slice_mri.get_lesions()
     height, width, channel = result_image.shape
 
-    # typing the status of the slice
-    cv2.putText(result_image, slice_mri.does_contain_lesion().__str__(), (width//40, 4*height//10), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255, 0, 255), 1)
-
     # typing number of lesions
     cv2.putText(result_image, len(lesions).__str__(), (width//40, 5*height//10), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255, 0, 255), 1)
 
