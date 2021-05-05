@@ -28,3 +28,9 @@ class MRISlice:
 
     def get_lesions(self):
         return self.lesions
+
+    def contains_lesion(self):
+        if len(self.lesions) > 0:
+            return True
+        else:
+            return False
