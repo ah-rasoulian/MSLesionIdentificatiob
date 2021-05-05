@@ -48,9 +48,10 @@ class Database:
                         lesion_contours = numpy.array(lesion_points).reshape((-1, 1, 2)).astype(numpy.int32)
                         mri_slice.add_new_lesion(lesion_contours)
 
+                # adding the slice into brain MRI
                 brain_examination.add_new_slice(mri_slice)
-
+            # adding brain examination into Patient object
             brain_samples.append(brain_examination)
-
+        # adding created Patient object into dataset
         new_sample = Patient(brain_samples[0], brain_samples[1])
         self.samples.append(new_sample)
