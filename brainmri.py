@@ -1,5 +1,6 @@
 class Patient:
-    def __init__(self, first_examination, second_examination):
+    def __init__(self, patient_code, first_examination, second_examination):
+        self.patient_code = patient_code
         self.first_examination = first_examination
         self.second_examination = second_examination
 

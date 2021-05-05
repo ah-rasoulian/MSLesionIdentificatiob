@@ -56,7 +56,11 @@ class Database:
                 slice_image = cv2.imread(slice_file_path, cv2.IMREAD_GRAYSCALE)
 
                 mri_slice = MRISlice(slice_image)
-                slice_file_name_without_extension = slice_file_name.replace('.TIF', '')
+                if slice_file_name.endswith('.TIF'):
+                    slice_file_name_without_extension = slice_file_name.replace('.TIF', '')
+                else:
+                    slice_file_name_without_extension = slice_file_name.replace('.bmp', '')
+
                 for lesion_file_name in lesions_files:
                     if lesion_file_name.startswith(slice_file_name_without_extension):
                         lesion_file_path = os.path.join(directory, lesion_file_name)
@@ -73,5 +77,8 @@ class Database:
             # adding brain examination into Patient object
             brain_samples.append(brain_examination)
         # adding created Patient object into dataset
-        new_sample = Patient(brain_samples[0], brain_samples[1])
+        sample_directory_parts = sample_directory.split('/')
+        patient_code = sample_directory_parts[len(sample_directory_parts) - 1]
+        new_sample = Patient(patient_code, brain_samples[0], brain_samples[1])
+
         self.samples.append(new_sample)
