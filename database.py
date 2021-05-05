@@ -22,7 +22,18 @@ class Database:
         return self.samples
 
     def get_all_slices_with_labels(self):
-        pass
+        slices = []
+        labels = []
+        for patient in self.samples:
+            patient: Patient
+            for brian_mri in patient.get_examinations():
+                brian_mri: BrainMRI
+                for slice_mri in brian_mri.get_slices():
+                    slice_mri: MRISlice
+                    slices.append(slice_mri.get_slice_image())
+                    labels.append(slice_mri.does_contain_lesion())
+
+        return slices, labels
 
     def add_new_sample(self, sample_directory: str):
         examination_directories = [sample_directory + "/1/", sample_directory + "/2/"]

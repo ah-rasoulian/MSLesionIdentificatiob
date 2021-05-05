@@ -3,6 +3,9 @@ class Patient:
         self.first_examination = first_examination
         self.second_examination = second_examination
 
+    def get_examinations(self):
+        return [self.first_examination, self.second_examination]
+
 
 class BrainMRI:
     def __init__(self):
@@ -29,8 +32,8 @@ class MRISlice:
     def get_lesions(self):
         return self.lesions
 
-    def contains_lesion(self):
+    def does_contain_lesion(self):
         if len(self.lesions) > 0:
-            return True
+            return 1
         else:
-            return False
+            return 0
