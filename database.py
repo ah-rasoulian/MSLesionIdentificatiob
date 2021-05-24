@@ -55,6 +55,10 @@ class Database:
                 slice_file_path = os.path.join(directory, slice_file_name)
                 slice_image = cv2.imread(slice_file_path, cv2.IMREAD_GRAYSCALE)
 
+                # resize image into 512 * 512 if it is not so
+                if slice_image.shape != (512, 512):
+                    slice_image = cv2.resize(slice_image, (512, 512))
+
                 mri_slice = MRISlice(slice_image)
                 if slice_file_name.endswith('.TIF'):
                     slice_file_name_without_extension = slice_file_name.replace('.TIF', '')

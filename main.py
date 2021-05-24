@@ -1,11 +1,12 @@
 from database import Database
 import visualizer
 from collections import Counter
+from sklearn.model_selection import train_test_split
 
 import numpy as np
-import matplotlib.pyplot as plt
 import pywt
 import cv2
+import tensorflow as tf
 
 
 def main():
@@ -15,14 +16,23 @@ def main():
 
     x, y = database.get_all_slices_with_labels()
 
-    image = x[12]
-    normalized_image = image_normalization_using_histogram_stretching(image)
+    train_images, test_images, train_labels, test_labels = train_test_split(x, y, test_size=0.2, random_state=42)
+    train_images, test_images, train_labels, test_labels = np.array(train_images), np.array(test_images), np.array(train_labels), np.array(test_labels)
+    train_images, test_images = train_images / 255.0, test_images / 255.0
 
-    cv2.imshow('mri', image)
-    cv2.waitKey(0)
+    model = tf.keras.Sequential([
+        tf.keras.layers.Flatten(input_shape=(512, 512)),
+        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.Dense(2)
+    ])
 
-    cv2.imshow('mri', normalized_image)
-    cv2.waitKey(0)
+    model.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
+
+    model.fit(train_images, train_labels, epochs=10)
+
+    test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=2)
+
+    print('\n Test Accuracy: ', test_acc)
 
 
 def print_labels_per_sample(database):
