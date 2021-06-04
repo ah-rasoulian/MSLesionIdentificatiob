@@ -1,5 +1,6 @@
 from database import Database
 import visualizer
+import preprocessor
 from collections import Counter
 from sklearn.model_selection import train_test_split
 
@@ -75,11 +76,6 @@ def print_labels_per_sample(database):
 def visualize_sample_brain(database, sample_index, examination_number):
     patient = database.get_samples()[sample_index]
     visualizer.show_brain_mri(patient.get_examinations()[examination_number])
-
-
-def image_normalization_using_histogram_stretching(image):
-    normalized_image = (image - numpy.min(image)) / (numpy.max(image) - numpy.min(image))
-    return normalized_image
 
 
 def stationary_wavelet_transform(image):
