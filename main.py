@@ -6,7 +6,6 @@ from sklearn.model_selection import train_test_split
 import numpy
 import pywt
 import cv2
-import tensorflow as tf
 
 
 def main():
@@ -16,17 +15,44 @@ def main():
 
     x, y = database.get_all_slices_with_labels()
 
+    deep_model_1(x, y)
+
+
+def stationary_wavelet_entropy_and_decision_tree_model(x, y):
+    from skimage.measure import shannon_entropy
+    from sklearn.tree import DecisionTreeClassifier
+
+    stationary_wavelet_entropy = []
+    for img in x:
+        sub_bands_entropy = []
+        for swt in stationary_wavelet_transform(img):
+            sub_bands_entropy.append(shannon_entropy(swt))
+        stationary_wavelet_entropy.append(sub_bands_entropy)
+
+    train_data, test_data, train_labels, test_labels = train_test_split(stationary_wavelet_entropy, y, test_size=0.2,
+                                                                        random_state=42)
+    classifier = DecisionTreeClassifier()
+    classifier.fit(train_data, train_labels)
+
+    p = classifier.predict(test_data)
+    get_evaluation_metrics(test_labels, p)
+
+
+def deep_model_1(x, y):
+    import tensorflow as tf
     train_images, test_images, train_labels, test_labels = train_test_split(x, y, test_size=0.2, random_state=42)
-    train_images, test_images, train_labels, test_labels = numpy.array(train_images), numpy.array(test_images), numpy.array(train_labels), numpy.array(test_labels)
+    train_images, test_images, train_labels, test_labels = numpy.array(train_images), numpy.array(
+        test_images), numpy.array(train_labels), numpy.array(test_labels)
     train_images, test_images = train_images / 255.0, test_images / 255.0
 
     model = tf.keras.Sequential([
         tf.keras.layers.Flatten(input_shape=(512, 512)),
-        tf.keras.layers.Dense(512, activation='relu'),
+        tf.keras.layers.Dense(512),
         tf.keras.layers.Dense(2)
     ])
 
-    model.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True), metrics=['accuracy'])
+    model.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                  metrics=['accuracy'])
 
     model.fit(train_images, train_labels, epochs=10)
 
@@ -57,9 +83,9 @@ def image_normalization_using_histogram_stretching(image):
 
 
 def stationary_wavelet_transform(image):
-    coefficients2 = pywt.swt2(image, 'bior1.3', 2)
-    (LL1, (LH1, HL1, HH1)), (LL2, (LH2, HL2, HH2)) = coefficients2
-    return [LL1, LH1, HL1, HL2, LL2, LH2, HL2, HH2]
+    coefficients2 = pywt.swt2(data=image, wavelet='bior1.1', level=2, trim_approx=True)
+    cA_2, (cH_2, cV_2, cD_2), (cH_1, cV_1, cD_1) = coefficients2
+    return [cA_2, cH_2, cV_2, cD_2, cH_1, cV_1, cD_1]
 
 
 # A function that returns accuracy, precision, recall and selectivity of the model based on test labels prediction
