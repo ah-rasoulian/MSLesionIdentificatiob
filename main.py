@@ -5,6 +5,7 @@ from collections import Counter
 from sklearn.model_selection import train_test_split
 
 import numpy
+import matplotlib.pyplot as plt
 import pywt
 import cv2
 
@@ -16,7 +17,11 @@ def main():
 
     x, y = database.get_all_slices_with_labels()
 
-    deep_model_1(x, y)
+    x_processed = []
+    for sample in x:
+        x_processed.append(preprocessor.remove_skull(sample))
+
+    deep_model_1(x_processed, y)
 
 
 def stationary_wavelet_entropy_and_decision_tree_model(x, y):
