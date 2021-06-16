@@ -8,11 +8,14 @@ def histogram_stretching(image):
 
 
 def remove_skull(slice_with_skull):
-    ret, thresh = cv2.threshold(src=slice_with_skull, thresh=25, maxval=255, type=cv2.THRESH_TOZERO)
+    # cv2.imshow('original', slice_with_skull)
+    # cv2.waitKey()
 
-    denoised = cv2.fastNlMeansDenoising(thresh, h=30, templateWindowSize=7, searchWindowSize=21)
+    # ret, thresh = cv2.threshold(src=slice_with_skull, thresh=95, maxval=255, type=cv2.THRESH_TOZERO)
 
-    ret, thresh2 = cv2.threshold(src=denoised, thresh=0, maxval=255, type=cv2.THRESH_OTSU)
+    # denoised = cv2.fastNlMeansDenoising(thresh, h=30, templateWindowSize=7, searchWindowSize=21)
+
+    ret, thresh2 = cv2.threshold(src=slice_with_skull, thresh=0, maxval=255, type=cv2.THRESH_OTSU)
 
     nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh2, connectivity=8)
     sizes = stats[:, -1]
@@ -33,5 +36,8 @@ def remove_skull(slice_with_skull):
 
     brain_out = slice_with_skull.copy()
     brain_out[img2 == 0] = 0
+
+    # cv2.imshow('brain out', brain_out)
+    # cv2.waitKey(0)
 
     return brain_out

@@ -1,7 +1,6 @@
 from brainmri import BrainMRI
 from brainmri import MRISlice
 from brainmri import Patient
-import preprocessor
 import scipy.io
 import os
 import cv2
@@ -59,7 +58,6 @@ class Database:
                 # resize image into 512 * 512 if it is not so
                 if slice_image.shape != (512, 512):
                     slice_image = cv2.resize(slice_image, (512, 512))
-                slice_image = preprocessor.remove_skull(slice_image)
 
                 mri_slice = MRISlice(slice_image)
                 if slice_file_name.endswith('.TIF'):
