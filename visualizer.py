@@ -21,12 +21,13 @@ def show_single_slice(slice_mri: MRISlice, slice_number, total_slices_number, wi
     cv2.imshow("MRI", result_image)
 
     key = cv2.waitKey(0)  # wait for a keystroke in the window
-    while key not in [27, 81, 82, 83, 84]:
+
+    while key not in [27, 97, 100, 119, 115]:
         key = cv2.waitKey(0)
 
-    if key == 82:
+    if key == 119:
         return show_single_slice(slice_mri, slice_number, total_slices_number, True)
-    elif key == 84:
+    elif key == 115:
         return show_single_slice(slice_mri, slice_number, total_slices_number, False)
     else:
         return key
@@ -40,7 +41,7 @@ def show_brain_mri(brain_mri: BrainMRI):
         next_instruction = show_single_slice(slices[slice_number], slice_number, len(slices) - 1)
         if next_instruction == 27:
             break
-        elif next_instruction == 81 and slice_number > 0:
+        elif next_instruction == 97 and slice_number > 0:
             slice_number -= 1
-        elif next_instruction == 83 and slice_number < len(slices) - 1:
+        elif next_instruction == 100 and slice_number < len(slices) - 1:
             slice_number += 1
