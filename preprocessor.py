@@ -17,13 +17,13 @@ class Patch:
 
 def get_image_patches(original_image, patch_width, patch_height, horizontal_gap=1, vertical_gap=1):
     patches = []
-    for x in range(0, original_image.shape[0], horizontal_gap):
-        if original_image.shape[0] - x < patch_width:
+    for y in range(0, original_image.shape[0], vertical_gap):
+        if original_image.shape[0] - y < patch_height:
             break
-        for y in range(0, original_image.shape[1], vertical_gap):
-            if original_image.shape[1] - y < patch_height:
+        for x in range(0, original_image.shape[1], horizontal_gap):
+            if original_image.shape[1] - x < patch_width:
                 break
-            patches.append(Patch(x, y, original_image[x:x + patch_width, y:y + patch_height]))
+            patches.append(Patch(x, y, original_image[y:y + patch_height, x:x + patch_width]))
     return patches
 
 
