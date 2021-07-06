@@ -1,3 +1,4 @@
+import preprocessor
 from brainmri import BrainMRI
 from brainmri import MRISlice
 from brainmri import Patient
@@ -34,6 +35,38 @@ class Database:
                     labels.append(slice_mri.does_contain_lesion())
 
         return slices, labels
+
+    def get_all_patches_with_labels(self, patch_width, patch_height, horizontal_gap=1, vertical_gap=1):
+        patches = []
+        labels = []
+
+        for patient in self.samples:
+            patient: Patient
+            for brain_mri in patient.get_examinations():
+                brain_mri: BrainMRI
+                for slice_mri in brain_mri.get_slices():
+                    slice_mri: MRISlice
+                    blank = numpy.zeros(slice_mri.get_slice_image().shape[0:2])
+                    lesions_contour_marked_image = cv2.drawContours(blank.copy(), slice_mri.get_lesions(), -1, 1, -1)
+                    for patch in preprocessor.get_image_patches(slice_mri.get_slice_image(), patch_width, patch_height,
+                                                                horizontal_gap, vertical_gap):
+                        patch_contour_points = [[patch.get_top_left_x(), patch.get_top_left_y()],
+                                                [patch.get_top_left_x() + patch_width, patch.get_top_left_y()],
+                                                [patch.get_top_left_x() + patch_width,
+                                                 patch.get_top_left_y() + patch_height],
+                                                [patch.get_top_left_x(), patch.get_top_left_y() + patch_height]]
+                        patch_contour = numpy.array(patch_contour_points).reshape((-1, 1, 2)).astype(numpy.int32)
+                        patch_contour_marked_image = cv2.drawContours(blank.copy(), [patch_contour], -1, 1, -1)
+
+                        patch_lesion_intersection = numpy.logical_and(lesions_contour_marked_image,
+                                                                      patch_contour_marked_image)
+
+                        patches.append(patch.patch_image)
+                        if patch_lesion_intersection.any():
+                            labels.append(1)
+                        else:
+                            labels.append(0)
+            return patches, labels
 
     def add_new_sample(self, sample_directory: str):
         examination_directories = [sample_directory + "/1/", sample_directory + "/2/"]

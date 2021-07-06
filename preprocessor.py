@@ -8,8 +8,11 @@ class Patch:
         self.y_in_original_image = y_in_original_image
         self.patch_image = patch_image
 
-    def get_top_left_location_in_original_image(self):
-        return self.x_in_original_image, self.y_in_original_image
+    def get_top_left_x(self):
+        return self.x_in_original_image
+
+    def get_top_left_y(self):
+        return self.y_in_original_image
 
     def get_patch_image(self):
         return self.patch_image
