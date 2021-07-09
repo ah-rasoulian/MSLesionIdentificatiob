@@ -66,7 +66,7 @@ class Database:
                             labels.append(1)
                         else:
                             labels.append(0)
-            return patches, labels
+        return patches, labels
 
     def add_new_sample(self, sample_directory: str):
         examination_directories = [sample_directory + "/1/", sample_directory + "/2/"]
