@@ -89,7 +89,10 @@ class Database:
                 slice_image = cv2.imread(slice_file_path, cv2.IMREAD_GRAYSCALE)
 
                 # resize image into 512 * 512 if it is not so
-                if slice_image.shape != (512, 512):
+                resized = False
+                original_size = slice_image.shape
+                if original_size != (512, 512):
+                    resized = True
                     slice_image = cv2.resize(slice_image, (512, 512))
 
                 mri_slice = MRISlice(slice_image)
@@ -105,7 +108,13 @@ class Database:
                         lesion_points = []
                         x, y = lesion_file.get("xi"), lesion_file.get('yi')
                         for i in range(len(x)):
-                            lesion_points.append([x[i][0], y[i][0]])
+                            if resized:
+                                _x = int(x[i][0] / original_size[1] * 512)
+                                _y = int(y[i][0] / original_size[0] * 512)
+                            else:
+                                _x = x[i][0]
+                                _y = y[i][0]
+                            lesion_points.append([_x, _y])
                         lesion_contours = numpy.array(lesion_points).reshape((-1, 1, 2)).astype(numpy.int32)
                         mri_slice.add_new_lesion(lesion_contours)
 
