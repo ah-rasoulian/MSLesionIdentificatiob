@@ -113,7 +113,7 @@ def histogram_stretching(image):
 # A function for skull stripping based on the following paper:
 # [1] S. Roy and P. Maji, “A simple skull stripping algorithm for brain MRI,” in 2015 Eighth International Conference on Advances in Pattern Recognition (ICAPR), Jan. 2015, pp. 1–6. doi: 10.1109/ICAPR.2015.7050671.
 #########################################################################
-def remove_skull_1(slice_with_skull):
+def skull_stripping_1(slice_with_skull):
     # 1- Apply the median filter with window of size 3*3 to the input image
     denoised = cv2.medianBlur(slice_with_skull, 3)
     # 2- Compute the initial mean intensity value Ti of the image.
