@@ -1,6 +1,80 @@
 import numpy
 import cv2
 
+kernel21 = numpy.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                        [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        ], numpy.uint8)
+
+kernel17 = numpy.array([[0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                        [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+                        ], numpy.uint8)
+
+kernel13 = numpy.array([[0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+                        ], numpy.uint8)
+
+kernel11 = numpy.array([[0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                        [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
+                        [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+                        ], numpy.uint8)
+
+kernel2 = numpy.array([[1, 1],
+                       [1, 1],
+                       ], numpy.uint8)
+
 
 class Patch:
     def __init__(self, x_in_original_image, y_in_original_image, patch_image):
@@ -35,17 +109,47 @@ def histogram_stretching(image):
     return normalized_image
 
 
-def remove_skull(slice_with_skull):
-    # cv2.imshow('original', slice_with_skull)
-    # cv2.waitKey()
+#########################################################################
+# A function for skull stripping based on the following paper:
+# [1] S. Roy and P. Maji, “A simple skull stripping algorithm for brain MRI,” in 2015 Eighth International Conference on Advances in Pattern Recognition (ICAPR), Jan. 2015, pp. 1–6. doi: 10.1109/ICAPR.2015.7050671.
+#########################################################################
+def remove_skull_1(slice_with_skull):
+    # 1- Apply the median filter with window of size 3*3 to the input image
+    denoised = cv2.medianBlur(slice_with_skull, 3)
+    # 2- Compute the initial mean intensity value Ti of the image.
+    initial_mean_intensity = numpy.mean(denoised)
 
-    # ret, thresh = cv2.threshold(src=slice_with_skull, thresh=95, maxval=255, type=cv2.THRESH_TOZERO)
+    # 3- Identify the top, bottom, left, and right pixel locations, from where brain skull starts in the image,
+    # considering gray values of the skull are greater than Ti.
+    mask_higher_than_initial_mean = cv2.inRange(denoised, initial_mean_intensity, 255)
+    contours, hierarchy = cv2.findContours(mask_higher_than_initial_mean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    biggest_contour = max(contours, key=cv2.contourArea)
 
-    # denoised = cv2.fastNlMeansDenoising(thresh, h=30, templateWindowSize=7, searchWindowSize=21)
+    # 4- Form a rectangle using the top, bottom, left, and right pixel locations.
+    x, y, w, h = cv2.boundingRect(biggest_contour)
 
-    ret, thresh2 = cv2.threshold(src=slice_with_skull, thresh=0, maxval=255, type=cv2.THRESH_OTSU)
+    # 5- Compute the final mean value Tf of the brain using the pixels located within the rectangle.
+    final_mean_intensity = numpy.mean(denoised[y:y + h, x:x + w])
+    mask_between_initial_and_final_mean = cv2.inRange(denoised, initial_mean_intensity, final_mean_intensity)
 
-    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(thresh2, connectivity=8)
+    # 6- Approximate the region of brain membrane or meninges that envelop the brain,
+    # based on the assumption that the intensity of skull is more than Tf
+    # and that of membrane is less than Tf .
+    membrane_region = cv2.bitwise_and(denoised, denoised, mask=mask_between_initial_and_final_mean).astype(numpy.float)
+    membrane_region[membrane_region == 0] = numpy.nan
+
+    # 7- Set the average intensity value of membrane as the threshold value T.
+    membrane_mean_intensity = numpy.nanmean(membrane_region)
+
+    # 8- Convert the given input image into binary image using the threshold T.
+    ret, thresh = cv2.threshold(denoised, membrane_mean_intensity, 255, cv2.THRESH_BINARY)
+
+    # 9- Apply a 13×13 opening morphological operation to the binary image in order to separate the skull from
+    # the brain completely.
+    opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel13)
+
+    # 10- Find the largest connected component and consider it as brain.
+    nb_components, output, stats, centroids = cv2.connectedComponentsWithStats(opening)
     sizes = stats[:, -1]
 
     max_label = 1
@@ -55,17 +159,14 @@ def remove_skull(slice_with_skull):
             max_label = i
             max_size = sizes[i]
 
-    img2 = slice_with_skull.copy()
+    img2 = opening.copy()
     img2[output != max_label] = 0
 
-    contours, hierarchy = cv2.findContours(img2, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    for contour in contours:
-        img2 = cv2.fillPoly(img2, pts=[contour], color=(255, 0, 0))
+    # Finally, apply a 21×21 closing morphological operation to fill the gaps within and along the periphery
+    # of the intracranial region.
+    closing = cv2.morphologyEx(img2, cv2.MORPH_CLOSE, kernel21, iterations=2)
 
+    # Get the parts of original image corresponding to the final mask computed
     brain_out = slice_with_skull.copy()
-    brain_out[img2 == 0] = 0
-
-    # cv2.imshow('brain out', brain_out)
-    # cv2.waitKey(0)
-
+    brain_out[closing == 0] = 0
     return brain_out
