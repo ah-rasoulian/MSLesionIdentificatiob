@@ -200,3 +200,52 @@ def skull_stripping_2(slice_with_skull):
     brain_out = slice_with_skull - skull
 
     return brain_out
+
+
+#########################################################################
+# A function for skull stripping based on the following paper:
+# R. Roslan, N. Jamil, and R. Mahmud, “Skull stripping of MRI brain images using mathematical morphology,” in 2010 IEEE EMBS Conference on Biomedical Engineering and Sciences (IECBES), Nov. 2010, pp. 26–31. doi: 10.1109/IECBES.2010.5742193.
+# Using its double thresholding method
+#########################################################################
+def skull_stripping_3(slice_with_skull):
+    # 1- Apply double thresholding whereas values below 0.2 and above 0.7 will be mapped to zero, and others to 1
+    ret, thresh = cv2.threshold(slice_with_skull, 0.7*255, 255, cv2.THRESH_TOZERO_INV)
+    ret, thresh = cv2.threshold(thresh, 0.2*255, 255, cv2.THRESH_BINARY)
+
+    # 2- Erode the binary image using kernel of disk-shaped with size of 10
+    eroded = cv2.morphologyEx(thresh, cv2.MORPH_ERODE, kernel21)
+
+    # 3- Dilate the eroded image using the same kernel
+    dilated = cv2.morphologyEx(eroded, cv2.MORPH_DILATE, kernel21)
+
+    # 4- Morphological enhancement using region filling
+    closing = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel21, iterations=2)
+
+    # Get the parts of original image corresponding to the final mask computed
+    brain_out = slice_with_skull.copy()
+    brain_out[closing == 0] = 0
+    return brain_out
+
+
+#########################################################################
+# A function for skull stripping based on the following paper:
+# R. Roslan, N. Jamil, and R. Mahmud, “Skull stripping of MRI brain images using mathematical morphology,” in 2010 IEEE EMBS Conference on Biomedical Engineering and Sciences (IECBES), Nov. 2010, pp. 26–31. doi: 10.1109/IECBES.2010.5742193.
+# Using its Otsu thresholding method
+#########################################################################
+def skull_stripping_4(slice_with_skull):
+    # 1- Apply Otsu thresholding
+    ret, thresh = cv2.threshold(slice_with_skull, 0, 255, cv2.THRESH_OTSU)
+
+    # 2- Erode the binary image using kernel of disk-shaped with size of 10
+    eroded = cv2.morphologyEx(thresh, cv2.MORPH_ERODE, kernel21)
+
+    # 3- Dilate the eroded image using the same kernel
+    dilated = cv2.morphologyEx(eroded, cv2.MORPH_DILATE, kernel21)
+
+    # 4- Morphological enhancement using region filling
+    closing = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel21, iterations=2)
+
+    # Get the parts of original image corresponding to the final mask computed
+    brain_out = slice_with_skull.copy()
+    brain_out[closing == 0] = 0
+    return brain_out
