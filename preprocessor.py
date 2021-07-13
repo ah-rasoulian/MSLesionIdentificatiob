@@ -191,7 +191,7 @@ def skull_stripping_2(slice_with_skull):
     dilated = cv2.morphologyEx(eroded, cv2.MORPH_DILATE, kernel9)
 
     # Convert Dilated image I3 to binary format (I4) using 0.185 threshold
-    ret, thresh = cv2.threshold(dilated, 0.185*255, 255, cv2.THRESH_BINARY)
+    ret, thresh = cv2.threshold(dilated, 0.185 * 255, 255, cv2.THRESH_BINARY)
 
     # Transform Binary image I4 to unit 8 format (I5)
     skull = cv2.bitwise_and(slice_with_skull, slice_with_skull, mask=thresh)
@@ -209,8 +209,8 @@ def skull_stripping_2(slice_with_skull):
 #########################################################################
 def skull_stripping_3(slice_with_skull):
     # 1- Apply double thresholding whereas values below 0.2 and above 0.7 will be mapped to zero, and others to 1
-    ret, thresh = cv2.threshold(slice_with_skull, 0.7*255, 255, cv2.THRESH_TOZERO_INV)
-    ret, thresh = cv2.threshold(thresh, 0.2*255, 255, cv2.THRESH_BINARY)
+    ret, thresh = cv2.threshold(slice_with_skull, 0.7 * 255, 255, cv2.THRESH_TOZERO_INV)
+    ret, thresh = cv2.threshold(thresh, 0.2 * 255, 255, cv2.THRESH_BINARY)
 
     # 2- Erode the binary image using kernel of disk-shaped with size of 10
     eroded = cv2.morphologyEx(thresh, cv2.MORPH_ERODE, kernel21)
@@ -249,3 +249,32 @@ def skull_stripping_4(slice_with_skull):
     brain_out = slice_with_skull.copy()
     brain_out[closing == 0] = 0
     return brain_out
+
+
+###############################################################################################
+# function that returns least sized image encompassing the brain with offset for possible error
+###############################################################################################
+def get_slice_region_of_interest(original_slice):
+    # 1- Apply the median filter with window of size 21*21 to the input image
+    denoised = cv2.medianBlur(original_slice, 21)
+
+    # 2- Compute the mask
+    ret, thresh = cv2.threshold(denoised, numpy.mean(denoised), 255, cv2.THRESH_BINARY)
+
+    # 3- Get all contours according to the mask
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # 4- Find the coordination of least sized image encompassing the whole brain
+    min_x, min_y, max_x, max_y = original_slice.shape[1], original_slice.shape[0], 0, 0
+
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        min_x, min_y, max_x, max_y = min(x, min_x), min(y, min_y), max(x + w, max_x), max(y + h, max_y)
+
+    # 5- Add offset to measured dimensions considering possible errors
+    offset = 16
+    min_x, min_y, max_x, max_y = max(min_x - offset, 0), max(min_y - offset, 0), min(max_x + offset, original_slice.shape[1]), min(
+        max_y + offset, original_slice.shape[0])
+
+    # 6- return the portion of original image according to calculated dimensions
+    return original_slice[min_y:max_y, min_x:max_x]
