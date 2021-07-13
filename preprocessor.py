@@ -71,8 +71,15 @@ kernel11 = numpy.array([[0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
                         [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
                         ], numpy.uint8)
 
-kernel2 = numpy.array([[1, 1],
-                       [1, 1],
+kernel9 = numpy.array([[0, 0, 0, 1, 1, 1, 0, 0, 0],
+                       [0, 0, 1, 1, 1, 1, 1, 0, 0],
+                       [0, 1, 1, 1, 1, 1, 1, 1, 0],
+                       [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                       [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                       [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                       [0, 1, 1, 1, 1, 1, 1, 1, 0],
+                       [0, 0, 1, 1, 1, 1, 1, 0, 0],
+                       [0, 0, 0, 1, 1, 1, 0, 0, 0],
                        ], numpy.uint8)
 
 
@@ -111,7 +118,7 @@ def histogram_stretching(image):
 
 #########################################################################
 # A function for skull stripping based on the following paper:
-# [1] S. Roy and P. Maji, “A simple skull stripping algorithm for brain MRI,” in 2015 Eighth International Conference on Advances in Pattern Recognition (ICAPR), Jan. 2015, pp. 1–6. doi: 10.1109/ICAPR.2015.7050671.
+# S. Roy and P. Maji, “A simple skull stripping algorithm for brain MRI,” in 2015 Eighth International Conference on Advances in Pattern Recognition (ICAPR), Jan. 2015, pp. 1–6. doi: 10.1109/ICAPR.2015.7050671.
 #########################################################################
 def skull_stripping_1(slice_with_skull):
     # 1- Apply the median filter with window of size 3*3 to the input image
@@ -169,4 +176,27 @@ def skull_stripping_1(slice_with_skull):
     # Get the parts of original image corresponding to the final mask computed
     brain_out = slice_with_skull.copy()
     brain_out[closing == 0] = 0
+    return brain_out
+
+
+#########################################################################
+# A function for skull stripping based on the following paper:
+# A. S. Bhadauria, V. Bhateja, M. Nigam, and A. Arya, “Skull Stripping of Brain MRI Using Mathematical Morphology,” in Smart Intelligent Computing and Applications, Singapore, 2020, pp. 775–780. doi: 10.1007/978-981-13-9282-5_75.
+#########################################################################
+def skull_stripping_2(slice_with_skull):
+    # Perform Erosion (I2) operation on I1 using se, disk-shaped structuring element (x) of size 4
+    eroded = cv2.morphologyEx(slice_with_skull, cv2.MORPH_ERODE, kernel9)
+
+    # Perform Dilation (I3) of the eroded image I2 using the same se
+    dilated = cv2.morphologyEx(eroded, cv2.MORPH_DILATE, kernel9)
+
+    # Convert Dilated image I3 to binary format (I4) using 0.185 threshold
+    ret, thresh = cv2.threshold(dilated, 0.185*255, 255, cv2.THRESH_BINARY)
+
+    # Transform Binary image I4 to unit 8 format (I5)
+    skull = cv2.bitwise_and(slice_with_skull, slice_with_skull, mask=thresh)
+
+    # Subtract (I6) I5 from I1
+    brain_out = slice_with_skull - skull
+
     return brain_out
