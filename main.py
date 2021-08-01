@@ -1,3 +1,5 @@
+import numpy as np
+
 from database import Database
 import visualizer
 import preprocessor
@@ -8,20 +10,34 @@ import numpy
 import matplotlib.pyplot as plt
 import pywt
 import cv2
+import tensorflow as tf
 
 
 def main():
     dataset_dir = "F://University/Final Project/dataset/Initial & repeat MRI in MS-Free Dataset"
     database = Database(dataset_dir)
     database.read_dataset()
+    # database.add_new_sample("F://University/Final Project/dataset/Initial & repeat MRI in MS-Free Dataset/AA")
+    #
+    x, y = database.get_all_patches_with_labels(64, 64, 64, 64)
+    print(len(x))
+    k_fold_cross_validation(x, y, 10, deep_model_1)
+    print(Counter(y))
 
-    x, y = database.get_all_slices_with_labels()
-
-    x_processed = []
-    for sample in x:
-        x_processed.append(preprocessor.remove_skull(sample))
-
-    deep_model_1(x_processed, y)
+    # for patient in database.get_samples():
+    #     for sample in patient.get_examinations():
+    #         for slice_mri in sample.get_slices()[8:]:
+    #             cv2.imshow("test", slice_mri.slice_image)
+    #             cv2.waitKey(0)
+    #
+    #             no_skull = preprocessor.skull_stripping_1(slice_mri.slice_image)
+    #             x, z, c = preprocessor.get_least_sized_image_encompassing_brain(no_skull)
+    #             cv2.imshow("no skull", x)
+    #             cv2.waitKey(0)
+    #
+    # for patient in database.get_samples():
+    #     for examination in patient.get_examinations():
+    #         visualizer.show_brain_mri(examination)
 
 
 def stationary_wavelet_entropy_and_decision_tree_model(x, y):
@@ -44,28 +60,41 @@ def stationary_wavelet_entropy_and_decision_tree_model(x, y):
     get_evaluation_metrics(test_labels, p)
 
 
-def deep_model_1(x, y):
-    import tensorflow as tf
-    train_images, test_images, train_labels, test_labels = train_test_split(x, y, test_size=0.2, random_state=42)
-    train_images, test_images, train_labels, test_labels = numpy.array(train_images), numpy.array(
-        test_images), numpy.array(train_labels), numpy.array(test_labels)
-    train_images, test_images = train_images / 255.0, test_images / 255.0
+def deep_model_1(train_images, validation_images, test_images, train_labels, validation_labels, test_labels):
+    METRICS = [
+
+        tf.keras.metrics.Precision(name='precision'),        # tf.keras.metrics.TruePositives(name='tp'),
+        # tf.keras.metrics.FalsePositives(name='fp'),
+        # tf.keras.metrics.TrueNegatives(name='tn'),
+        # tf.keras.metrics.FalseNegatives(name='fn'),
+        # tf.keras.metrics.BinaryAccuracy(name='accuracy'),
+        tf.keras.metrics.Recall(name='recall'),
+    ]
 
     model = tf.keras.Sequential([
-        tf.keras.layers.Flatten(input_shape=(512, 512)),
-        tf.keras.layers.Dense(512),
-        tf.keras.layers.Dense(2)
+        tf.keras.layers.Conv2D(32, (5, 5), activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Conv2D(16, (3, 3), activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(64),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(32),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(1, activation='sigmoid')
     ])
 
-    model.compile(optimizer='adam', loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-                  metrics=['accuracy'])
+    model.compile(
+        optimizer="adam",
+        loss=tf.keras.losses.BinaryCrossentropy(),
+        metrics=METRICS)
 
-    model.fit(train_images, train_labels, epochs=10)
+    model.fit(train_images, train_labels, epochs=10, validation_data=(validation_images, validation_labels))
 
-    test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=2)
+    print('\n Test Result: \n')
+    model.evaluate(test_images, test_labels, verbose=2)
+
     prediction = numpy.argmax(model.predict(test_images), axis=-1)
-
-    print('\n Test Accuracy: ', test_acc)
     get_evaluation_metrics(test_labels, prediction)
 
 
@@ -119,6 +148,75 @@ def get_evaluation_metrics(actual_labels, predicted_labels):
         "\naccuracy: {}\nprecision: {}\nrecall: {}\nselectivity: {}\n".format(accuracy, precision, recall, selectivity))
 
     return accuracy, precision, recall, selectivity
+
+
+# A function that divides dataset into k parts, 70% for training - 20% for validation and 10% for test, whereas these ratios can change
+# Then loops over different folds and runs segmentation method on them.
+# k 10 , i = 0 , i-0.7
+def k_fold_cross_validation(x, y, k, model_name):
+    TRAIN_SIZE = 0.7
+    VALIDATION_SIZE = 0.2
+    TEST_SIZE = 1 - TRAIN_SIZE - VALIDATION_SIZE
+    portions_length = len(y) // k
+
+    for i in range(1):  # 1 must be changed into k after model is completed
+        # calculating train indices
+        if i + TRAIN_SIZE * k <= k:
+            if k - (i + TRAIN_SIZE * k) < 1:
+                train_indices = np.arange(i * portions_length, len(y))
+            else:
+                train_indices = np.arange(i * portions_length, (i + TRAIN_SIZE * k) * portions_length)
+        else:
+            train_indices = np.concatenate(
+                [np.arange(i * portions_length, len(y)), np.arange(0, ((i + TRAIN_SIZE * k) % k) * portions_length)])
+
+        # calculating validation indices
+        if i + (TRAIN_SIZE + VALIDATION_SIZE) * k <= k:
+            if k - (i + (TRAIN_SIZE + VALIDATION_SIZE) * k) < 1:
+                validation_indices = np.arange((i + TRAIN_SIZE * k) * portions_length, len(y))
+            else:
+                validation_indices = np.arange((i + TRAIN_SIZE * k) * portions_length,
+                                               (i + (TRAIN_SIZE + VALIDATION_SIZE) * k) * portions_length)
+        else:
+            if i + TRAIN_SIZE * k <= k:
+                validation_indices = np.concatenate([np.arange((i + TRAIN_SIZE * k) * portions_length, len(y)),
+                                                     np.arange(0, ((i + (
+                                                                 TRAIN_SIZE + VALIDATION_SIZE) * k) % k) * portions_length)])
+            else:
+                validation_indices = np.arange(((i + TRAIN_SIZE * k) % k) * portions_length,
+                                               ((i + (TRAIN_SIZE + VALIDATION_SIZE) * k) % k) * portions_length)
+
+        # calculating test indices
+        if i + (TRAIN_SIZE + VALIDATION_SIZE + TEST_SIZE) * k <= k:
+            if k - (i + (TRAIN_SIZE + VALIDATION_SIZE + TEST_SIZE) * k) < 1:
+                test_indices = np.arange((i + (TRAIN_SIZE + VALIDATION_SIZE) * k) * portions_length, len(y))
+            else:
+                test_indices = np.arange((i + (TRAIN_SIZE + VALIDATION_SIZE) * k) * portions_length,
+                                         (i + (TRAIN_SIZE + VALIDATION_SIZE + TEST_SIZE) * k))
+        else:
+            if i + (TRAIN_SIZE + VALIDATION_SIZE) * k <= k:
+                test_indices = np.concatenate(
+                    [np.arange((i + (TRAIN_SIZE + VALIDATION_SIZE) * k) * portions_length, len(y)),
+                     np.arange(0, ((i + (TRAIN_SIZE + VALIDATION_SIZE + TEST_SIZE) * k) % k) * portions_length)])
+            else:
+                test_indices = np.arange(((i + (TRAIN_SIZE + VALIDATION_SIZE) * k) % k) * portions_length,
+                                         ((i + (TRAIN_SIZE + VALIDATION_SIZE + TEST_SIZE) * k) % k) * portions_length)
+
+        # creating datasets
+        x = numpy.array(x)
+        y = numpy.array(y)
+        train_indices = train_indices.astype(np.intp)
+        validation_indices = validation_indices.astype(np.intp)
+        test_indices = test_indices.astype(np.intp)
+
+        train_images, validation_images, test_images, train_labels, validation_labels, test_labels = x[train_indices], x[validation_indices], x[test_indices], y[train_indices], y[validation_indices], y[test_indices]
+        train_images, validation_images, test_images = train_images / 255.0, validation_images / 255, test_images / 255.0
+
+        train_images = train_images[..., tf.newaxis]
+        validation_images = validation_images[..., tf.newaxis]
+        test_images = test_images[..., tf.newaxis]
+
+        model_name(train_images, validation_images, test_images, train_labels, validation_labels, test_labels)
 
 
 # A function that handles division by zero
