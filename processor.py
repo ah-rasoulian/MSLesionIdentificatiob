@@ -1,7 +1,11 @@
+import matplotlib.pyplot as plt
 import pywt
 import tensorflow as tf
 import numpy as np
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.optimizers import RMSprop
+import matplotlib.pyplot
+import math
 
 
 # A function that returns accuracy, precision, recall and selectivity of the model based on test labels prediction
@@ -139,49 +143,74 @@ def k_fold_cross_validation(x, y, k, model_name):
                                                                                                      y[
                                                                                                          validation_indices], \
                                                                                                      y[test_indices]
-        train_images, validation_images, test_images = train_images / 255.0, validation_images / 255, test_images / 255.0
-
-        train_images = train_images[..., tf.newaxis]
-        validation_images = validation_images[..., tf.newaxis]
-        test_images = test_images[..., tf.newaxis]
 
         model_name(train_images, validation_images, test_images, train_labels, validation_labels, test_labels)
 
 
 def deep_model_1(train_images, validation_images, test_images, train_labels, validation_labels, test_labels):
-    METRICS = [
+    train_images, validation_images, test_images = train_images / 255.0, validation_images / 255, test_images / 255.0
 
+    train_images = train_images[..., tf.newaxis]
+    validation_images = validation_images[..., tf.newaxis]
+    test_images = test_images[..., tf.newaxis]
+
+    METRICS = [
+        tf.keras.metrics.BinaryAccuracy(name='accuracy'),
         tf.keras.metrics.Precision(name='precision'),
+        tf.keras.metrics.Recall(name='recall'),
+        tf.keras.metrics.AUC(name='auc'),
+        tf.keras.metrics.AUC(name='prc', curve='PR'),  # precision-recall curve
         tf.keras.metrics.TruePositives(name='tp'),
         tf.keras.metrics.FalsePositives(name='fp'),
         tf.keras.metrics.TrueNegatives(name='tn'),
         tf.keras.metrics.FalseNegatives(name='fn'),
-        tf.keras.metrics.BinaryAccuracy(name='accuracy'),
-        tf.keras.metrics.Recall(name='recall'),
     ]
 
     model = tf.keras.Sequential([
-        tf.keras.layers.Conv2D(16, (3, 3), activation='relu'),
-        tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.Conv2D(32, (5, 5), activation='relu'),
-        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Conv2D(16, (3, 3), activation='relu', input_shape=(32, 32, 1)),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+        tf.keras.layers.MaxPooling2D(2, 2),
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(64),
-        tf.keras.layers.Dropout(0.5),
-        tf.keras.layers.Dense(32),
-        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dropout(0.2),
         tf.keras.layers.Dense(1, activation='sigmoid')
     ])
 
     model.compile(
-        optimizer="adam",
+        optimizer=RMSprop(learning_rate=1e-3),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
 
-    model.fit(train_images, train_labels, epochs=10, validation_data=(validation_images, validation_labels))
+    history = model.fit(train_images, train_labels, epochs=200, batch_size=8192,
+                        validation_data=(validation_images, validation_labels))
 
     print('\n Test Result: \n')
     model.evaluate(test_images, test_labels, verbose=2)
 
     prediction = np.argmax(model.predict(test_images), axis=-1)
     get_evaluation_metrics(test_labels, prediction)
+
+    history_metrics = ['loss', 'accuracy', 'precision', 'recall', 'auc', 'prc', 'tp', 'fp', 'tn', 'fn']
+    show_history(history, history_metrics)
+
+
+def show_history(history, metrics):
+    number_of_columns = math.floor(math.sqrt(len(metrics)))
+    number_of_rows = math.ceil(len(metrics) / number_of_columns)
+
+    fig = plt.figure(constrained_layout=True)
+    grid = fig.add_gridspec(number_of_rows, number_of_columns)
+    for i, metric in enumerate(metrics):
+        train_metric = history.history[metric]
+        val_metric = history.history['val_' + metric]
+        epochs = np.arange(1, len(train_metric) + 1)
+
+        ax = fig.add_subplot(grid[i % max(number_of_rows, number_of_columns), i // max(number_of_rows, number_of_columns)])
+        ax.plot(epochs, train_metric, color='b', label='training')
+        ax.plot(epochs, val_metric, color='r', label='validation')
+        ax.set(xlabel='epochs', ylabel=metric)
+
+    plt.show()
