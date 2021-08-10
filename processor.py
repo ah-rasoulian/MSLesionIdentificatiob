@@ -1,11 +1,14 @@
-import matplotlib.pyplot as plt
+import cv2
 import pywt
 import tensorflow as tf
 import numpy as np
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.optimizers import RMSprop
-import matplotlib.pyplot
+from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
 import math
+from collections import Counter
+import random
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 
 # A function that returns accuracy, precision, recall and selectivity of the model based on test labels prediction
@@ -147,7 +150,7 @@ def k_fold_cross_validation(x, y, k, model_name):
         model_name(train_images, validation_images, test_images, train_labels, validation_labels, test_labels)
 
 
-def deep_model_1(train_images, validation_images, test_images, train_labels, validation_labels, test_labels):
+def deep_model_patch(train_images, validation_images, test_images, train_labels, validation_labels, test_labels):
     train_images, validation_images, test_images = train_images / 255.0, validation_images / 255, test_images / 255.0
 
     train_images = train_images[..., tf.newaxis]
@@ -167,14 +170,16 @@ def deep_model_1(train_images, validation_images, test_images, train_labels, val
     ]
 
     model = tf.keras.Sequential([
-        tf.keras.layers.Conv2D(16, (3, 3), activation='relu', input_shape=(32, 32, 1)),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', input_shape=(32, 32, 1)),
         tf.keras.layers.MaxPooling2D(2, 2),
-        tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
         tf.keras.layers.MaxPooling2D(2, 2),
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
         tf.keras.layers.MaxPooling2D(2, 2),
         tf.keras.layers.Flatten(),
-        tf.keras.layers.Dense(64),
+        tf.keras.layers.Dense(128, activation='relu'),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(64, activation='relu'),
         tf.keras.layers.Dropout(0.2),
         tf.keras.layers.Dense(1, activation='sigmoid')
     ])
@@ -184,8 +189,15 @@ def deep_model_1(train_images, validation_images, test_images, train_labels, val
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
 
-    history = model.fit(train_images, train_labels, epochs=200, batch_size=8192,
-                        validation_data=(validation_images, validation_labels))
+    model.summary()
+
+    class_weights = {}
+    for key, value in Counter(train_labels).items():
+        class_weights[key] = len(train_labels) / value
+
+    history = model.fit(train_images, train_labels, epochs=100, batch_size=2048, shuffle=True,
+                        validation_data=(validation_images, validation_labels), validation_batch_size=1024,
+                        class_weight=class_weights, verbose=2)
 
     print('\n Test Result: \n')
     model.evaluate(test_images, test_labels, verbose=2)
@@ -208,9 +220,130 @@ def show_history(history, metrics):
         val_metric = history.history['val_' + metric]
         epochs = np.arange(1, len(train_metric) + 1)
 
-        ax = fig.add_subplot(grid[i % max(number_of_rows, number_of_columns), i // max(number_of_rows, number_of_columns)])
+        ax = fig.add_subplot(
+            grid[i % max(number_of_rows, number_of_columns), i // max(number_of_rows, number_of_columns)])
         ax.plot(epochs, train_metric, color='b', label='training')
         ax.plot(epochs, val_metric, color='r', label='validation')
         ax.set(xlabel='epochs', ylabel=metric)
 
     plt.show()
+
+
+def deep_model_slice(train_images, validation_images, test_images, train_labels, validation_labels, test_labels):
+    train_images = np.array([cv2.resize(x, (256, 256)) for x in train_images])
+    validation_images = np.array([cv2.resize(x, (256, 256)) for x in validation_images])
+    test_images = np.array([cv2.resize(x, (256, 256)) for x in test_images])
+
+    train_images = np.expand_dims(train_images, -1)
+    validation_images = np.expand_dims(validation_images, -1)
+    test_images = np.expand_dims(test_images, -1)
+
+    train_datagen = ImageDataGenerator(rescale=1. / 255,
+                                       rotation_range=15,
+                                       zoom_range=0.3,
+                                       fill_mode='nearest'
+                                       )
+    validation_datagen = ImageDataGenerator(rescale=1. / 255)
+
+    TRAIN_BATCH_SIZE = 128
+    train_datagen.fit(train_images)
+    train_generator = train_datagen.flow(train_images, train_labels, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
+    validation_datagen.fit(validation_images)
+    validation_generator = validation_datagen.flow(validation_images, validation_labels)
+
+    model = get_CNN_model_1()
+    class_weights = {}
+    for key, value in Counter(train_labels).items():
+        class_weights[key] = len(train_labels) / value
+
+    history = model.fit(train_generator, steps_per_epoch=len(train_labels) // TRAIN_BATCH_SIZE, epochs=200,
+                        validation_data=validation_generator, class_weight=class_weights,
+                        verbose=2)
+
+    print('\n Test Result: \n')
+    model.evaluate(test_images, test_labels, verbose=2)
+
+    prediction = np.argmax(model.predict(test_images), axis=-1)
+    get_evaluation_metrics(test_labels, prediction)
+
+    history_metrics = ['loss', 'accuracy', 'precision', 'recall', 'auc', 'prc', 'tp', 'fp', 'tn', 'fn']
+    show_history(history, history_metrics)
+
+
+# Convolutional Neural Network based on the paper:
+# [1]Y.-D. Zhang, C. Pan, J. Sun, and C. Tang, “Multiple sclerosis identification by convolutional neural network with dropout and parametric ReLU,” Journal of Computational Science, vol. 28, pp. 1–10, Sep. 2018, doi: 10.1016/j.jocs.2018.07.003.
+def get_CNN_model_1():
+    METRICS = [
+        tf.keras.metrics.BinaryAccuracy(name='accuracy'),
+        tf.keras.metrics.Precision(name='precision'),
+        tf.keras.metrics.Recall(name='recall'),
+        tf.keras.metrics.AUC(name='auc'),
+        tf.keras.metrics.AUC(name='prc', curve='PR'),  # precision-recall curve
+        tf.keras.metrics.TruePositives(name='tp'),
+        tf.keras.metrics.FalsePositives(name='fp'),
+        tf.keras.metrics.TrueNegatives(name='tn'),
+        tf.keras.metrics.FalseNegatives(name='fn'),
+    ]
+
+    model = tf.keras.Sequential([
+        tf.keras.layers.InputLayer(input_shape=(256, 256, 1)),
+
+        tf.keras.layers.ZeroPadding2D((2, 2)),
+        tf.keras.layers.Conv2D(16, (5, 5), strides=3, name='Conv_1'),
+        tf.keras.layers.PReLU(tf.keras.initializers.Constant(0.25)),
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.MaxPooling2D((3, 3), strides=1, name='Pool_1'),
+
+        tf.keras.layers.ZeroPadding2D((2, 2)),
+        tf.keras.layers.Conv2D(32, (3, 3), strides=3, name='Conv_2'),
+        tf.keras.layers.PReLU(tf.keras.initializers.Constant(0.25)),
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.MaxPooling2D((3, 3), strides=1, name='Pool_2'),
+
+
+        tf.keras.layers.Conv2D(32, (3, 3), strides=3, name='Conv_3'),
+        tf.keras.layers.PReLU(tf.keras.initializers.Constant(0.25)),
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.MaxPooling2D((3, 3), strides=1, name='Pool_3'),
+
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.Conv2D(64, (3, 3), strides=3, name='Conv_4'),
+        tf.keras.layers.PReLU(tf.keras.initializers.Constant(0.25)),
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.MaxPooling2D((3, 3), strides=1, name='Pool_4'),
+
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.Conv2D(64, (3, 3), strides=1, name='Conv_5'),
+        tf.keras.layers.PReLU(tf.keras.initializers.Constant(0.25)),
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.MaxPooling2D((3, 3), strides=1, name='Pool_5'),
+
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.Conv2D(64, (3, 3), strides=1, name='Conv_6'),
+        tf.keras.layers.PReLU(tf.keras.initializers.Constant(0.25)),
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.MaxPooling2D((3, 3), strides=1, name='Pool_6'),
+
+        tf.keras.layers.Conv2D(128, (1, 1), strides=1, name='Conv_7'),
+        tf.keras.layers.PReLU(tf.keras.initializers.Constant(0.25)),
+        tf.keras.layers.ZeroPadding2D((1, 1)),
+        tf.keras.layers.MaxPooling2D((3, 3), strides=1, name='Pool_7'),
+
+        tf.keras.layers.Dropout(0.4, name='Dropout_1'),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(500, name='FC_1'),
+
+        tf.keras.layers.Dropout(0.5, name='Dropout_2'),
+        tf.keras.layers.Dense(100, name='FC_2'),
+
+        tf.keras.layers.Dropout(0.5, name='Dropout_3'),
+        tf.keras.layers.Dense(1, name='FC_3', activation='sigmoid'),
+    ])
+
+    model.compile(
+        optimizer=Adam(learning_rate=5e-6),
+        loss=tf.keras.losses.BinaryCrossentropy(),
+        metrics=METRICS)
+
+    model.summary()
+    return model
