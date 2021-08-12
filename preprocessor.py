@@ -279,8 +279,13 @@ def get_least_sized_image_encompassing_brain(original_slice, offset):
                                                                                      original_slice.shape[1]), min(
         max_y + offset, original_slice.shape[0])
 
-    # 6- return the portion of original image according to calculated dimensions and top left corner location
-    return original_slice[min_y:max_y, min_x:max_x], min_x, min_y
+    # 6- return the portion of original image according to calculated dimensions and top left corner location and make it squared
+    rect = original_slice[min_y:max_y, min_x:max_x]
+    height, width = rect.shape
+    max_dimension = max(height, width)
+    squared = np.zeros((max_dimension, max_dimension), np.uint8)
+    squared[int((max_dimension - height) / 2):int(max_dimension - (max_dimension - height) / 2), int((max_dimension - width) / 2):int(max_dimension - (max_dimension - width) / 2)] = rect
+    return squared, min_x - (int(max_dimension - width) / 2), min_y - int((max_dimension - height) / 2)
 
 
 def pre_processing(original_slice):
