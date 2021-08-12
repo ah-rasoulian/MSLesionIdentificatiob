@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import math
 from collections import Counter
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import preprocessor
+import os
 
 
 # A function that returns accuracy, precision, recall and selectivity of the model based on test labels prediction
@@ -177,16 +179,17 @@ def train_model(train_images, validation_images, test_images, train_labels, vali
     validation_images = np.array([cv2.resize(x, input_shape) for x in validation_images])
     test_images = np.array([cv2.resize(x, input_shape) for x in test_images])
 
-    train_images = np.expand_dims(train_images, -1)
     validation_images = np.expand_dims(validation_images, -1)
     test_images = np.expand_dims(test_images, -1)
+    train_images = np.expand_dims(train_images, -1)
 
     if augment:
         train_datagen = ImageDataGenerator(rescale=1. / 255,
                                            rotation_range=15,
-                                           zoom_range=0.3,
-                                           fill_mode='nearest'
-                                           )
+                                           width_shift_range=10,
+                                           height_shift_range=10,
+                                           zoom_range=[0.7, 1.3],
+                                           preprocessing_function=preprocessor.random_augment)
     else:
         train_datagen = ImageDataGenerator(rescale=1. / 255)
 
@@ -196,6 +199,8 @@ def train_model(train_images, validation_images, test_images, train_labels, vali
     train_generator = train_datagen.flow(train_images, train_labels, batch_size=train_batch_size, shuffle=True)
     validation_datagen.fit(validation_images)
     validation_generator = validation_datagen.flow(validation_images, validation_labels)
+
+    # show_augmented_images(train_generator, 10)
 
     model = model_name(input_shape)
     if weighted_class:
@@ -345,7 +350,8 @@ def vgg_model(input_shape):
 
     x = tf.keras.layers.Input(shape=(input_shape[0], input_shape[1], 1))
     x = tf.keras.layers.Concatenate()([x, x, x])
-    vgg = tf.keras.applications.VGG16(input_tensor=x, include_top=False, input_shape=(input_shape[0], input_shape[1], 3))
+    vgg = tf.keras.applications.VGG16(input_tensor=x, include_top=False,
+                                      input_shape=(input_shape[0], input_shape[1], 3))
     for layer in vgg.layers:
         layer.trainable = False
 
@@ -363,3 +369,88 @@ def vgg_model(input_shape):
 
     model.summary()
     return model
+
+
+# produce 150 images per training image via scaling, noise addition, gamma correction, translation and rotation based on the paper:
+# [1]Y.-D. Zhang, C. Pan, J. Sun, and C. Tang, “Multiple sclerosis identification by convolutional neural network with dropout and parametric ReLU,” Journal of Computational Science, vol. 28, pp. 1–10, Sep. 2018, doi: 10.1016/j.jocs.2018.07.003.
+def augment_train_images(images, labels):
+    parent_path = 'F:\\University\\Final Project\\dataset\\data-augmented\\'
+    parent_dirs = os.listdir(parent_path)
+    if len(parent_dirs) > 0:
+        new_dir_name = str(int(parent_dirs[len(parent_dirs) - 1]) + 1)
+    else:
+        new_dir_name = '0'
+
+    new_dir_path = os.path.join(parent_path, new_dir_name)
+    os.mkdir(new_dir_path)
+    class0_dir = os.path.join(new_dir_path, '0')
+    os.mkdir(class0_dir)
+    class1_dir = os.path.join(new_dir_path, '1')
+    os.mkdir(class1_dir)
+
+    image_number = -1
+    for i, image in enumerate(images):
+        # image rotation
+        for angle in range(-15, 15, 1):
+            image_number += 1
+            angle_radiance = angle / 180 * np.pi
+            if labels[i] == 0:
+                cv2.imwrite(class0_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_rotation(image, angle_radiance))
+            else:
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_rotation(image, angle_radiance))
+
+        # gamma correction
+        for gamma_value in range(70, 130, 2):
+            image_number += 1
+            if labels[i] == 0:
+                cv2.imwrite(class0_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_gamma_correction(image, gamma_value / 100))
+            else:
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_gamma_correction(image, gamma_value / 100))
+
+        # gaussian noise injection with mean 0 and variance 0.01
+        for j in range(30):
+            image_number += 1
+            if labels[i] == 0:
+                cv2.imwrite(class0_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_gaussian_noise_injection(image, 0, 0.01) * 255)
+            else:
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_gaussian_noise_injection(image, 0, 0.01) * 255)
+
+        # random translation within 0-10 pixels
+        for j in np.random.randint(-100, 100, 30):
+            image_number += 1
+            if j < 0:
+                width_shift, height_shift = -(-i // 10), -(-i % 10)
+            else:
+                width_shift, height_shift = i // 10, i % 10
+
+            if labels[i] == 0:
+                cv2.imwrite(class0_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_translation(image, width_shift, height_shift))
+            else:
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_translation(image, width_shift, height_shift))
+
+        # zoom image
+        for scale_factor in range(70, 130, 2):
+            image_number += 1
+            if labels[i] == 0:
+                cv2.imwrite(class0_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.clipped_zoom(image, scale_factor / 100))
+            else:
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.clipped_zoom(image, scale_factor / 100))
+
+    return new_dir_path
+
+
+def show_augmented_images(generator, k):
+    for i in range(k):
+        image, label = generator.next()
+        cv2.imshow('augmented samples', image[0, :, :, 0])
+        cv2.waitKey(0)

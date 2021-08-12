@@ -3,6 +3,7 @@ import cv2
 import tensorflow_addons as tfa
 import tensorflow as tf
 from scipy.ndimage import zoom
+import random
 
 kernel21 = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                      [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
@@ -283,8 +284,8 @@ def get_least_sized_image_encompassing_brain(original_slice, offset):
 
 
 def pre_processing(original_slice):
-    no_skull = skull_stripping_1(original_slice)
-    return get_least_sized_image_encompassing_brain(no_skull, 32)
+    # no_skull = skull_stripping_1(original_slice)
+    return get_least_sized_image_encompassing_brain(original_slice, 16)
     # return original_slice, 0, 0
 
 
@@ -350,3 +351,20 @@ def clipped_zoom(img, zoom_factor, **kwargs):
     else:
         out = img
     return out
+
+
+def random_augment(image):
+    actual_image = image[:, :, 0]
+    random_preprocessing = random.randint(0, 2)
+    # gamma correction
+    if random_preprocessing == 0:
+        gamma = random.uniform(0.8, 1.1)
+        result = image_gamma_correction(actual_image, gamma)
+    # noise injection
+    elif random_preprocessing == 1:
+        result = image_gaussian_noise_injection(actual_image, 0, 0.01) * 255
+    # no preprocessing
+    else:
+        result = actual_image
+
+    return np.expand_dims(result, 2)
