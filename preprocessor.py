@@ -1,86 +1,89 @@
-import numpy
+import numpy as np
 import cv2
+import tensorflow_addons as tfa
+import tensorflow as tf
+from scipy.ndimage import zoom
 
-kernel21 = numpy.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-                        [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                        ], numpy.uint8)
+kernel21 = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                     [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                     [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                     ], np.uint8)
 
-kernel17 = numpy.array([[0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-                        [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
-                        ], numpy.uint8)
+kernel17 = np.array([[0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                     [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                     [0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0],
+                     ], np.uint8)
 
-kernel13 = numpy.array([[0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
-                        ], numpy.uint8)
+kernel13 = np.array([[0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+                     ], np.uint8)
 
-kernel11 = numpy.array([[0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                        [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
-                        [0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0],
-                        [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
-                        [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-                        ], numpy.uint8)
+kernel11 = np.array([[0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+                     [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                     [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+                     [0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0],
+                     [0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0],
+                     [0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+                     [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+                     ], np.uint8)
 
-kernel9 = numpy.array([[0, 0, 0, 1, 1, 1, 0, 0, 0],
-                       [0, 0, 1, 1, 1, 1, 1, 0, 0],
-                       [0, 1, 1, 1, 1, 1, 1, 1, 0],
-                       [1, 1, 1, 1, 1, 1, 1, 1, 1],
-                       [1, 1, 1, 1, 1, 1, 1, 1, 1],
-                       [1, 1, 1, 1, 1, 1, 1, 1, 1],
-                       [0, 1, 1, 1, 1, 1, 1, 1, 0],
-                       [0, 0, 1, 1, 1, 1, 1, 0, 0],
-                       [0, 0, 0, 1, 1, 1, 0, 0, 0],
-                       ], numpy.uint8)
+kernel9 = np.array([[0, 0, 0, 1, 1, 1, 0, 0, 0],
+                    [0, 0, 1, 1, 1, 1, 1, 0, 0],
+                    [0, 1, 1, 1, 1, 1, 1, 1, 0],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1],
+                    [0, 1, 1, 1, 1, 1, 1, 1, 0],
+                    [0, 0, 1, 1, 1, 1, 1, 0, 0],
+                    [0, 0, 0, 1, 1, 1, 0, 0, 0],
+                    ], np.uint8)
 
 
 class Patch:
@@ -112,7 +115,7 @@ def get_image_patches(original_image, patch_width, patch_height, horizontal_gap=
 
 
 def histogram_stretching(image):
-    normalized_image = (image - numpy.min(image)) / (numpy.max(image) - numpy.min(image))
+    normalized_image = (image - np.min(image)) / (np.max(image) - np.min(image))
     return normalized_image
 
 
@@ -124,7 +127,7 @@ def skull_stripping_1(slice_with_skull):
     # 1- Apply the median filter with window of size 3*3 to the input image
     denoised = cv2.medianBlur(slice_with_skull, 3)
     # 2- Compute the initial mean intensity value Ti of the image.
-    initial_mean_intensity = numpy.mean(denoised)
+    initial_mean_intensity = np.mean(denoised)
 
     # 3- Identify the top, bottom, left, and right pixel locations, from where brain skull starts in the image,
     # considering gray values of the skull are greater than Ti.
@@ -135,17 +138,17 @@ def skull_stripping_1(slice_with_skull):
     x, y, w, h = cv2.boundingRect(biggest_contour)
 
     # 5- Compute the final mean value Tf of the brain using the pixels located within the rectangle.
-    final_mean_intensity = numpy.mean(denoised[y:y + h, x:x + w])
+    final_mean_intensity = np.mean(denoised[y:y + h, x:x + w])
     mask_between_initial_and_final_mean = cv2.inRange(denoised, initial_mean_intensity, final_mean_intensity)
 
     # 6- Approximate the region of brain membrane or meninges that envelop the brain,
     # based on the assumption that the intensity of skull is more than Tf
     # and that of membrane is less than Tf .
-    membrane_region = cv2.bitwise_and(denoised, denoised, mask=mask_between_initial_and_final_mean).astype(numpy.float)
-    membrane_region[membrane_region == 0] = numpy.nan
+    membrane_region = cv2.bitwise_and(denoised, denoised, mask=mask_between_initial_and_final_mean).astype(np.float)
+    membrane_region[membrane_region == 0] = np.nan
 
     # 7- Set the average intensity value of membrane as the threshold value T.
-    membrane_mean_intensity = numpy.nanmean(membrane_region)
+    membrane_mean_intensity = np.nanmean(membrane_region)
 
     # 8- Convert the given input image into binary image using the threshold T.
     ret, thresh = cv2.threshold(denoised, membrane_mean_intensity, 255, cv2.THRESH_BINARY)
@@ -258,7 +261,7 @@ def get_least_sized_image_encompassing_brain(original_slice, offset):
     denoised = cv2.medianBlur(original_slice, 21)
 
     # 2- Compute the mask
-    ret, thresh = cv2.threshold(denoised, numpy.mean(denoised), 255, cv2.THRESH_BINARY)
+    ret, thresh = cv2.threshold(denoised, np.mean(denoised), 255, cv2.THRESH_BINARY)
 
     # 3- Get all contours according to the mask
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -275,11 +278,79 @@ def get_least_sized_image_encompassing_brain(original_slice, offset):
                                                                                      original_slice.shape[1]), min(
         max_y + offset, original_slice.shape[0])
 
-    # 6- return the portion of original image according to calculated dimensions and top left cornenr location
+    # 6- return the portion of original image according to calculated dimensions and top left corner location
     return original_slice[min_y:max_y, min_x:max_x], min_x, min_y
 
 
 def pre_processing(original_slice):
     no_skull = skull_stripping_1(original_slice)
-    return get_least_sized_image_encompassing_brain(no_skull, 16)
+    return get_least_sized_image_encompassing_brain(no_skull, 32)
     # return original_slice, 0, 0
+
+
+def image_rotation(image, angle):
+    return tfa.image.rotate(image, angle).np()
+
+
+def image_gamma_correction(image, gamma, gain=1):
+    return tf.image.adjust_gamma(image, gamma, gain).np()
+
+
+def image_gaussian_noise_injection(image, mean, variance):
+    row, col = image.shape
+    sigma = variance ** 0.5
+    gauss = np.random.normal(mean, sigma, (row, col))
+    noisy = image / 255 + gauss
+    return noisy
+
+
+def image_translation(image, width_shift, height_shift):
+    return tfa.image.translate(image, (width_shift, height_shift)).numpy()
+
+
+def image_scaling(image, scale_factor):
+    return cv2.resize(image, image.shape, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
+
+
+# function copied from https://stackoverflow.com/questions/37119071/scipy-rotate-and-zoom-an-image-without-changing-its-dimensions
+# it has a bug in
+def clipped_zoom(img, zoom_factor, **kwargs):
+    h, w = img.shape[:2]
+
+    # For multichannel images we don't want to apply the zoom factor to the RGB
+    # dimension, so instead we create a tuple of zoom factors, one per array
+    # dimension, with 1's for any trailing dimensions after the width and height.
+    zoom_tuple = (zoom_factor,) * 2 + (1,) * (img.ndim - 2)
+
+    # Zooming out
+    if zoom_factor < 1:
+
+        # Bounding box of the zoomed-out image within the output array
+        zh = int(np.round(h * zoom_factor))
+        zw = int(np.round(w * zoom_factor))
+        top = (h - zh) // 2
+        left = (w - zw) // 2
+
+        # Zero-padding
+        out = np.zeros_like(img)
+        out[top:top + zh, left:left + zw] = zoom(img, zoom_tuple, **kwargs)
+
+    # Zooming in
+    elif zoom_factor > 1:
+
+        # Bounding box of the zoomed-in region within the input array
+        zh = int(np.round(h / zoom_factor))
+        zw = int(np.round(w / zoom_factor))
+        top = (h - zh) // 2
+        left = (w - zw) // 2
+        out = zoom(img[top:top + zh, left:left + zw], zoom_tuple, **kwargs)
+        # `out` might still be slightly larger than `img` due to rounding, so
+        # trim off any extra pixels at the edges
+        trim_top = max(((out.shape[0] - h) // 2), 0)
+        trim_left = max(((out.shape[1] - w) // 2), 0)
+        out = out[trim_top:trim_top + h, trim_left:trim_left + w]
+
+    # If zoom_factor == 1, just return the input array
+    else:
+        out = img
+    return out
