@@ -3,11 +3,10 @@ import pywt
 import tensorflow as tf
 import numpy as np
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import RMSprop
 import matplotlib.pyplot as plt
 import math
 from collections import Counter
-import random
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 
@@ -82,7 +81,7 @@ def stationary_wavelet_entropy_and_decision_tree_model(x, y):
 # A function that divides dataset into k parts, 70% for training - 20% for validation and 10% for test, whereas these ratios can change
 # Then loops over different folds and runs segmentation method on them.
 # k 10 , i = 0 , i-0.7
-def k_fold_cross_validation(x, y, k, model_name):
+def k_fold_cross_validation(x, y, k, model_name, input_shape, train_batch_size, augment, weighted_class):
     TRAIN_SIZE = 0.7
     VALIDATION_SIZE = 0.2
     TEST_SIZE = 1 - TRAIN_SIZE - VALIDATION_SIZE
@@ -147,16 +146,76 @@ def k_fold_cross_validation(x, y, k, model_name):
                                                                                                          validation_indices], \
                                                                                                      y[test_indices]
 
-        model_name(train_images, validation_images, test_images, train_labels, validation_labels, test_labels)
+        train_model(train_images, validation_images, test_images, train_labels, validation_labels, test_labels,
+                    model_name, input_shape, train_batch_size, augment, weighted_class)
 
 
-def deep_model_patch(train_images, validation_images, test_images, train_labels, validation_labels, test_labels):
-    train_images, validation_images, test_images = train_images / 255.0, validation_images / 255, test_images / 255.0
+def show_history(history, metrics):
+    number_of_columns = math.floor(math.sqrt(len(metrics)))
+    number_of_rows = math.ceil(len(metrics) / number_of_columns)
 
-    train_images = train_images[..., tf.newaxis]
-    validation_images = validation_images[..., tf.newaxis]
-    test_images = test_images[..., tf.newaxis]
+    fig = plt.figure(constrained_layout=True)
+    grid = fig.add_gridspec(number_of_rows, number_of_columns)
+    for i, metric in enumerate(metrics):
+        train_metric = history.history[metric]
+        val_metric = history.history['val_' + metric]
+        epochs = np.arange(1, len(train_metric) + 1)
 
+        ax = fig.add_subplot(
+            grid[i % max(number_of_rows, number_of_columns), i // max(number_of_rows, number_of_columns)])
+        ax.plot(epochs, train_metric, color='b', label='train')
+        ax.plot(epochs, val_metric, color='r', label='validation')
+        ax.set(xlabel='epochs', ylabel=metric)
+        ax.legend(loc='best')
+
+    plt.show()
+
+
+def train_model(train_images, validation_images, test_images, train_labels, validation_labels, test_labels, model_name,
+                input_shape, train_batch_size, augment, weighted_class):
+    train_images = np.array([cv2.resize(x, input_shape) for x in train_images])
+    validation_images = np.array([cv2.resize(x, input_shape) for x in validation_images])
+    test_images = np.array([cv2.resize(x, input_shape) for x in test_images])
+
+    train_images = np.expand_dims(train_images, -1)
+    validation_images = np.expand_dims(validation_images, -1)
+    test_images = np.expand_dims(test_images, -1)
+
+    if augment:
+        train_datagen = ImageDataGenerator(rescale=1. / 255,
+                                           rotation_range=15,
+                                           zoom_range=0.3,
+                                           fill_mode='nearest'
+                                           )
+    else:
+        train_datagen = ImageDataGenerator(rescale=1. / 255)
+
+    validation_datagen = ImageDataGenerator(rescale=1. / 255)
+
+    train_datagen.fit(train_images)
+    train_generator = train_datagen.flow(train_images, train_labels, batch_size=train_batch_size, shuffle=True)
+    validation_datagen.fit(validation_images)
+    validation_generator = validation_datagen.flow(validation_images, validation_labels)
+
+    model = model_name(input_shape)
+    if weighted_class:
+        class_weights = {}
+        for key, value in Counter(train_labels).items():
+            class_weights[key] = len(train_labels) / value
+    else:
+        class_weights = None
+
+    history = model.fit(train_generator, epochs=500, validation_data=validation_generator, class_weight=class_weights,
+                        verbose=2)
+
+    print('\n Test Result: \n')
+    model.evaluate(test_images, test_labels, verbose=2)
+
+    history_metrics = ['loss', 'accuracy', 'precision', 'recall', 'auc', 'prc', 'tp', 'fp', 'tn', 'fn']
+    show_history(history, history_metrics)
+
+
+def CNN_model_7_layers(input_shape):
     METRICS = [
         tf.keras.metrics.BinaryAccuracy(name='accuracy'),
         tf.keras.metrics.Precision(name='precision'),
@@ -170,7 +229,7 @@ def deep_model_patch(train_images, validation_images, test_images, train_labels,
     ]
 
     model = tf.keras.Sequential([
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', input_shape=(32, 32, 1)),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', input_shape=(input_shape[0], input_shape[1], 1)),
         tf.keras.layers.MaxPooling2D(2, 2),
         tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
         tf.keras.layers.MaxPooling2D(2, 2),
@@ -190,89 +249,12 @@ def deep_model_patch(train_images, validation_images, test_images, train_labels,
         metrics=METRICS)
 
     model.summary()
-
-    class_weights = {}
-    for key, value in Counter(train_labels).items():
-        class_weights[key] = len(train_labels) / value
-
-    history = model.fit(train_images, train_labels, epochs=100, batch_size=2048, shuffle=True,
-                        validation_data=(validation_images, validation_labels), validation_batch_size=1024,
-                        class_weight=class_weights, verbose=2)
-
-    print('\n Test Result: \n')
-    model.evaluate(test_images, test_labels, verbose=2)
-
-    prediction = np.argmax(model.predict(test_images), axis=-1)
-    get_evaluation_metrics(test_labels, prediction)
-
-    history_metrics = ['loss', 'accuracy', 'precision', 'recall', 'auc', 'prc', 'tp', 'fp', 'tn', 'fn']
-    show_history(history, history_metrics)
-
-
-def show_history(history, metrics):
-    number_of_columns = math.floor(math.sqrt(len(metrics)))
-    number_of_rows = math.ceil(len(metrics) / number_of_columns)
-
-    fig = plt.figure(constrained_layout=True)
-    grid = fig.add_gridspec(number_of_rows, number_of_columns)
-    for i, metric in enumerate(metrics):
-        train_metric = history.history[metric]
-        val_metric = history.history['val_' + metric]
-        epochs = np.arange(1, len(train_metric) + 1)
-
-        ax = fig.add_subplot(
-            grid[i % max(number_of_rows, number_of_columns), i // max(number_of_rows, number_of_columns)])
-        ax.plot(epochs, train_metric, color='b', label='training')
-        ax.plot(epochs, val_metric, color='r', label='validation')
-        ax.set(xlabel='epochs', ylabel=metric)
-
-    plt.show()
-
-
-def deep_model_slice(train_images, validation_images, test_images, train_labels, validation_labels, test_labels):
-    train_images = np.array([cv2.resize(x, (256, 256)) for x in train_images])
-    validation_images = np.array([cv2.resize(x, (256, 256)) for x in validation_images])
-    test_images = np.array([cv2.resize(x, (256, 256)) for x in test_images])
-
-    train_images = np.expand_dims(train_images, -1)
-    validation_images = np.expand_dims(validation_images, -1)
-    test_images = np.expand_dims(test_images, -1)
-
-    train_datagen = ImageDataGenerator(rescale=1. / 255,
-                                       rotation_range=15,
-                                       zoom_range=0.3,
-                                       fill_mode='nearest'
-                                       )
-    validation_datagen = ImageDataGenerator(rescale=1. / 255)
-
-    TRAIN_BATCH_SIZE = 128
-    train_datagen.fit(train_images)
-    train_generator = train_datagen.flow(train_images, train_labels, batch_size=TRAIN_BATCH_SIZE, shuffle=True)
-    validation_datagen.fit(validation_images)
-    validation_generator = validation_datagen.flow(validation_images, validation_labels)
-
-    model = get_CNN_model_1()
-    class_weights = {}
-    for key, value in Counter(train_labels).items():
-        class_weights[key] = len(train_labels) / value
-
-    history = model.fit(train_generator, steps_per_epoch=len(train_labels) // TRAIN_BATCH_SIZE, epochs=200,
-                        validation_data=validation_generator, class_weight=class_weights,
-                        verbose=2)
-
-    print('\n Test Result: \n')
-    model.evaluate(test_images, test_labels, verbose=2)
-
-    prediction = np.argmax(model.predict(test_images), axis=-1)
-    get_evaluation_metrics(test_labels, prediction)
-
-    history_metrics = ['loss', 'accuracy', 'precision', 'recall', 'auc', 'prc', 'tp', 'fp', 'tn', 'fn']
-    show_history(history, history_metrics)
+    return model
 
 
 # Convolutional Neural Network based on the paper:
 # [1]Y.-D. Zhang, C. Pan, J. Sun, and C. Tang, “Multiple sclerosis identification by convolutional neural network with dropout and parametric ReLU,” Journal of Computational Science, vol. 28, pp. 1–10, Sep. 2018, doi: 10.1016/j.jocs.2018.07.003.
-def get_CNN_model_1():
+def CNN_model_10_layers(input_shape):
     METRICS = [
         tf.keras.metrics.BinaryAccuracy(name='accuracy'),
         tf.keras.metrics.Precision(name='precision'),
@@ -286,7 +268,7 @@ def get_CNN_model_1():
     ]
 
     model = tf.keras.Sequential([
-        tf.keras.layers.InputLayer(input_shape=(256, 256, 1)),
+        tf.keras.layers.InputLayer(input_shape=(input_shape[0], input_shape[1], 1)),
 
         tf.keras.layers.ZeroPadding2D((2, 2)),
         tf.keras.layers.Conv2D(16, (5, 5), strides=3, name='Conv_1'),
@@ -299,7 +281,6 @@ def get_CNN_model_1():
         tf.keras.layers.PReLU(tf.keras.initializers.Constant(0.25)),
         tf.keras.layers.ZeroPadding2D((1, 1)),
         tf.keras.layers.MaxPooling2D((3, 3), strides=1, name='Pool_2'),
-
 
         tf.keras.layers.Conv2D(32, (3, 3), strides=3, name='Conv_3'),
         tf.keras.layers.PReLU(tf.keras.initializers.Constant(0.25)),
@@ -341,7 +322,42 @@ def get_CNN_model_1():
     ])
 
     model.compile(
-        optimizer=Adam(learning_rate=5e-6),
+        optimizer=RMSprop(learning_rate=1e-3),
+        loss=tf.keras.losses.BinaryCrossentropy(),
+        metrics=METRICS)
+
+    model.summary()
+    return model
+
+
+def vgg_model(input_shape):
+    METRICS = [
+        tf.keras.metrics.BinaryAccuracy(name='accuracy'),
+        tf.keras.metrics.Precision(name='precision'),
+        tf.keras.metrics.Recall(name='recall'),
+        tf.keras.metrics.AUC(name='auc'),
+        tf.keras.metrics.AUC(name='prc', curve='PR'),  # precision-recall curve
+        tf.keras.metrics.TruePositives(name='tp'),
+        tf.keras.metrics.FalsePositives(name='fp'),
+        tf.keras.metrics.TrueNegatives(name='tn'),
+        tf.keras.metrics.FalseNegatives(name='fn'),
+    ]
+
+    x = tf.keras.layers.Input(shape=(input_shape[0], input_shape[1], 1))
+    x = tf.keras.layers.Concatenate()([x, x, x])
+    vgg = tf.keras.applications.VGG16(input_tensor=x, include_top=False, input_shape=(input_shape[0], input_shape[1], 3))
+    for layer in vgg.layers:
+        layer.trainable = False
+
+    x = tf.keras.layers.Flatten()(vgg.output)
+    x = tf.keras.layers.Dense(1024, activation='relu')(x)
+    x = tf.keras.layers.Dropout(0.4)(x)
+    x = tf.keras.layers.Dense(1, activation='sigmoid')(x)
+
+    model = tf.keras.models.Model(vgg.input, x)
+
+    model.compile(
+        optimizer=RMSprop(learning_rate=1e-4),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
 

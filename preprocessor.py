@@ -253,7 +253,7 @@ def skull_stripping_4(slice_with_skull):
 ###############################################################################################
 # function that returns least sized image encompassing the brain with offset for possible error
 ###############################################################################################
-def get_least_sized_image_encompassing_brain(original_slice):
+def get_least_sized_image_encompassing_brain(original_slice, offset):
     # 1- Apply the median filter with window of size 21*21 to the input image
     denoised = cv2.medianBlur(original_slice, 21)
 
@@ -271,7 +271,6 @@ def get_least_sized_image_encompassing_brain(original_slice):
         min_x, min_y, max_x, max_y = min(x, min_x), min(y, min_y), max(x + w, max_x), max(y + h, max_y)
 
     # 5- Add offset to measured dimensions considering possible errors
-    offset = 16
     min_x, min_y, max_x, max_y = max(min_x - offset, 0), max(min_y - offset, 0), min(max_x + offset,
                                                                                      original_slice.shape[1]), min(
         max_y + offset, original_slice.shape[0])
@@ -282,4 +281,5 @@ def get_least_sized_image_encompassing_brain(original_slice):
 
 def pre_processing(original_slice):
     no_skull = skull_stripping_1(original_slice)
-    return get_least_sized_image_encompassing_brain(no_skull)
+    return get_least_sized_image_encompassing_brain(no_skull, 16)
+    # return original_slice, 0, 0
