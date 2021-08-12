@@ -289,11 +289,11 @@ def pre_processing(original_slice):
 
 
 def image_rotation(image, angle):
-    return tfa.image.rotate(image, angle).np()
+    return tfa.image.rotate(image, angle).numpy()
 
 
 def image_gamma_correction(image, gamma, gain=1):
-    return tf.image.adjust_gamma(image, gamma, gain).np()
+    return tf.image.adjust_gamma(image, gamma, gain).numpy()
 
 
 def image_gaussian_noise_injection(image, mean, variance):
@@ -306,10 +306,6 @@ def image_gaussian_noise_injection(image, mean, variance):
 
 def image_translation(image, width_shift, height_shift):
     return tfa.image.translate(image, (width_shift, height_shift)).numpy()
-
-
-def image_scaling(image, scale_factor):
-    return cv2.resize(image, image.shape, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
 
 
 # function copied from https://stackoverflow.com/questions/37119071/scipy-rotate-and-zoom-an-image-without-changing-its-dimensions
