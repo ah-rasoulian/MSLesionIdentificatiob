@@ -363,7 +363,7 @@ def random_augment(image):
     random_preprocessing = random.randint(0, 2)
     # gamma correction
     if random_preprocessing == 0:
-        gamma = random.uniform(0.8, 1.1)
+        gamma = random.uniform(0.7, 1.3)
         result = image_gamma_correction(actual_image, gamma)
     # noise injection
     elif random_preprocessing == 1:
