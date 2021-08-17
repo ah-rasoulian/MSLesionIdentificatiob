@@ -48,6 +48,8 @@ class Database:
                     slice_mri: MRISlice
                     blank = numpy.zeros(slice_mri.get_slice_image().shape[0:2])
                     lesions_contour_marked_image = cv2.drawContours(blank.copy(), slice_mri.get_lesions(), -1, 1, -1)
+                    unique, counts = numpy.unique(lesions_contour_marked_image, return_counts=True)
+                    total_number_of_lesions_pixels = dict(zip(unique, counts)).get(1, 0)
                     for patch in preprocessor.get_image_patches(slice_mri.get_slice_image(), patch_width, patch_height,
                                                                 horizontal_gap, vertical_gap):
                         patch_contour_points = [[patch.get_top_left_x(), patch.get_top_left_y()],
@@ -60,9 +62,11 @@ class Database:
 
                         patch_lesion_intersection = numpy.logical_and(lesions_contour_marked_image,
                                                                       patch_contour_marked_image)
+                        unique, counts = numpy.unique(patch_lesion_intersection, return_counts=True)
+                        patch_number_of_lesions_pixels = dict(zip(unique, counts)).get(1, 0)
 
                         patches.append(patch.patch_image)
-                        if patch_lesion_intersection.any():
+                        if patch_number_of_lesions_pixels > total_number_of_lesions_pixels / 2 or patch_number_of_lesions_pixels >= (0.05 * patch_width * patch_height):
                             labels.append(1)
                         else:
                             labels.append(0)
