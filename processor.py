@@ -10,6 +10,7 @@ from collections import Counter
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import preprocessor
 import os
+import random
 
 METRICS = [
     tf.keras.metrics.BinaryAccuracy(name='accuracy'),
@@ -21,6 +22,10 @@ METRICS = [
     tf.keras.metrics.FalsePositives(name='fp'),
     tf.keras.metrics.TrueNegatives(name='tn'),
     tf.keras.metrics.FalseNegatives(name='fn'),
+]
+
+METRICS_CAT = [
+    tf.keras.metrics.Accuracy(name='accuracy'),
 ]
 
 
@@ -95,7 +100,8 @@ def stationary_wavelet_entropy_and_decision_tree_model(x, y):
 # A function that divides dataset into k parts, 70% for training - 20% for validation and 10% for test, whereas these ratios can change
 # Then loops over different folds and runs segmentation method on them.
 # k 10 , i = 0 , i-0.7
-def k_fold_cross_validation(x, y, k, model_name, input_shape, train_batch_size, augment_type, weighted_class, fine_tune, manual_augment_path=None):
+def k_fold_cross_validation(x, y, k, model_name, input_shape, output_dim,train_batch_size, augment_type, weighted_class,
+                            fine_tune, num_epochs, manual_augment_path=None):
     TRAIN_SIZE = 0.7
     VALIDATION_SIZE = 0.2
     TEST_SIZE = 1 - TRAIN_SIZE - VALIDATION_SIZE
@@ -161,7 +167,8 @@ def k_fold_cross_validation(x, y, k, model_name, input_shape, train_batch_size, 
                                                                                                      y[test_indices]
 
         train_model(train_images, validation_images, test_images, train_labels, validation_labels, test_labels,
-                    model_name, input_shape, train_batch_size, augment_type, weighted_class, fine_tune, manual_augment_path)
+                    model_name, input_shape, output_dim, train_batch_size, augment_type, weighted_class, fine_tune,
+                    num_epochs, manual_augment_path)
 
 
 def show_history(history, metrics, fine_tune_history):
@@ -191,16 +198,18 @@ def show_history(history, metrics, fine_tune_history):
 
 
 def train_model(train_images, validation_images, test_images, train_labels, validation_labels, test_labels, model_name,
-                input_shape, train_batch_size, augment_type, weighted_class, fine_tune, manual_augment_path):  # augment_type: 0 for no augment, 1 for Image data generator, 2 for manual
-    validation_images = np.array([cv2.resize(x, input_shape) for x in validation_images])
-    test_images = np.array([cv2.resize(x, input_shape) for x in test_images])
+                input_shape, output_dim, train_batch_size, augment_type, weighted_class, fine_tune, num_epochs,
+                manual_augment_path):  # augment_type: 0 for no augment, 1 for Image data generator, 2 for manual
 
+    train_images = np.array([cv2.resize(x, input_shape) for x in train_images])
+    validation_images = np.array([cv2.resize(x, input_shape) for x in validation_images])
     validation_images = np.expand_dims(validation_images, -1)
-    test_images = np.expand_dims(test_images, -1)
+
+    if test_images is not None:
+        test_images = np.array([cv2.resize(x, input_shape) for x in test_images])
+        test_images = np.expand_dims(test_images, -1)
 
     if augment_type == 1:
-        train_images = np.array([cv2.resize(x, input_shape) for x in train_images])
-        train_images = np.expand_dims(train_images, -1)
         train_datagen = ImageDataGenerator(rescale=1. / 255,
                                            rotation_range=15,
                                            width_shift_range=10,
@@ -212,19 +221,32 @@ def train_model(train_images, validation_images, test_images, train_labels, vali
 
     validation_datagen = ImageDataGenerator(rescale=1. / 255)
 
-    if augment_type == 2:
+    if augment_type == 2 or augment_type == 3:
         if manual_augment_path is None:
-            manual_augment_path = manual_augmentation(train_images, train_labels)
+            if augment_type == 2:
+                manual_augment_path = manual_augmentation(train_images, train_labels)
+            else:
+                manual_augment_path = manual_balance_augmentation(train_images, train_labels)
+
+        if output_dim == 2:
+            class_mode = 'categorical'
+        else:
+            class_mode = 'binary'
         train_generator = train_datagen.flow_from_directory(directory=manual_augment_path,
                                                             target_size=input_shape, color_mode='grayscale',
-                                                            class_mode='binary',
+                                                            class_mode=class_mode,
                                                             batch_size=train_batch_size,
                                                             shuffle=True)
         train_images = None
     else:
+        train_images = np.expand_dims(train_images, -1)
         train_datagen.fit(train_images)
+        if output_dim == 2:
+            train_labels = tf.keras.utils.to_categorical(train_labels)
         train_generator = train_datagen.flow(train_images, train_labels, batch_size=train_batch_size, shuffle=True)
     validation_datagen.fit(validation_images)
+    if output_dim == 2:
+        validation_labels = tf.keras.utils.to_categorical(validation_labels)
     validation_generator = validation_datagen.flow(validation_images, validation_labels)
 
     # show_augmented_images(train_generator, 10)
@@ -237,9 +259,9 @@ def train_model(train_images, validation_images, test_images, train_labels, vali
     else:
         class_weights = None
 
-    history = model.fit(train_generator, epochs=100, validation_data=validation_generator, class_weight=class_weights,
+    history = model.fit(train_generator, epochs=num_epochs, validation_data=validation_generator,
+                        class_weight=class_weights,
                         verbose=1)
-
     # fine tuning
     fine_tune_history = None
     if fine_tune:
@@ -248,8 +270,11 @@ def train_model(train_images, validation_images, test_images, train_labels, vali
                                       class_weight=class_weights,
                                       verbose=1)
 
-    print('\n Test Result: \n')
-    model.evaluate(test_images, test_labels, verbose=2)
+    if test_labels is not None:
+        if output_dim == 2:
+            test_labels = tf.keras.utils.to_categorical(test_labels)
+        print('\n Test Result: \n')
+        model.evaluate(test_images, test_labels, verbose=2)
 
     history_metrics = ['loss', 'accuracy', 'precision', 'recall', 'auc', 'prc', 'tp', 'fp', 'tn', 'fn']
     show_history(history, history_metrics, fine_tune_history)
@@ -257,22 +282,28 @@ def train_model(train_images, validation_images, test_images, train_labels, vali
 
 def CNN_model_7_layers(input_shape):
     model = tf.keras.Sequential([
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', input_shape=(input_shape[0], input_shape[1], 1)),
-        tf.keras.layers.MaxPooling2D(2, 2),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
-        tf.keras.layers.MaxPooling2D(2, 2),
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
-        tf.keras.layers.MaxPooling2D(2, 2),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', input_shape=(input_shape[0], input_shape[1], 1),
+                               padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Dropout(0.1),
+        tf.keras.layers.MaxPooling2D((2, 2)),
+
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dense(128, activation='relu'),
-        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dropout(0.4),
         tf.keras.layers.Dense(64, activation='relu'),
-        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dropout(0.5),
         tf.keras.layers.Dense(1, activation='sigmoid')
     ])
 
     model.compile(
-        optimizer=RMSprop(learning_rate=1e-3),
+        optimizer=RMSprop(learning_rate=1e-4),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
 
@@ -334,13 +365,13 @@ def CNN_model_10_layers(input_shape):
         tf.keras.layers.Dense(100, name='FC_2'),
 
         tf.keras.layers.Dropout(0.5, name='Dropout_3'),
-        tf.keras.layers.Dense(1, name='FC_3', activation='sigmoid'),
+        tf.keras.layers.Dense(2, name='FC_3', activation='softmax'),
     ])
 
     model.compile(
         optimizer=RMSprop(learning_rate=1e-3),
-        loss=tf.keras.losses.BinaryCrossentropy(),
-        metrics=METRICS)
+        loss=tf.keras.losses.categorical_crossentropy(),
+        metrics=METRICS_CAT)
 
     model.summary()
     return model
@@ -495,11 +526,19 @@ def CNN_model_test(input_shape):
     model = tf.keras.Sequential([
         tf.keras.layers.InputLayer(input_shape=(input_shape[0], input_shape[1], 1)),
 
-        tf.keras.layers.Conv2D(64, (3, 3), activation='relu'),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Dropout(0.1),
+        tf.keras.layers.Conv2D(128, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
-        tf.keras.layers.AvgPool2D((3, 3)),
+        tf.keras.layers.AvgPool2D((2, 2)),
 
-        tf.keras.layers.Conv2D(128, (3, 3), activation='relu'),
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.AvgPool2D((2, 2)),
+
+        tf.keras.layers.Conv2D(256, (3, 3), activation='relu', padding='same'),
         tf.keras.layers.BatchNormalization(),
         tf.keras.layers.AvgPool2D((2, 2)),
 
@@ -517,3 +556,248 @@ def CNN_model_test(input_shape):
 
     model.summary()
     return model
+
+
+# copied from DeepLearning.AI Tensorflow course by Laurence Moroney
+def show_model_pathway(model, sample):
+    sample = np.expand_dims(sample, 0)
+
+    # Let's define a new Model that will take an image as input, and will output
+    # intermediate representations for all layers in the previous model after
+    # the first.
+    successive_outputs = [layer.output for layer in model.layers[1:]]
+
+    # visualization_model = Model(img_input, successive_outputs)
+    visualization_model = tf.keras.models.Model(inputs=model.input, outputs=successive_outputs)
+
+    # Let's run our image through our network, thus obtaining all
+    # intermediate representations for this image.
+    successive_feature_maps = visualization_model.predict(sample)
+
+    # These are the names of the layers, so can have them as part of our plot
+    layer_names = [layer.name for layer in model.layers]
+
+    # -----------------------------------------------------------------------
+    # Now let's display our representations
+    # -----------------------------------------------------------------------
+    for layer_name, feature_map in zip(layer_names, successive_feature_maps):
+        if len(feature_map.shape) == 4:
+            # -------------------------------------------
+            # Just do this for the conv / maxpool layers, not the fully-connected layers
+            # -------------------------------------------
+            n_features = feature_map.shape[-1]  # number of features in the feature map
+            size = feature_map.shape[1]  # feature map shape (1, size, size, n_features)
+
+            # We will tile our images in this matrix
+            display_grid = np.zeros((size, size * n_features))
+
+            # -------------------------------------------------
+            # Postprocess the feature to be visually palatable
+            # -------------------------------------------------
+            for i in range(n_features):
+                x = feature_map[0, :, :, i]
+                x -= x.mean()
+                x /= x.std()
+                x *= 64
+                x += 128
+                x = np.clip(x, 0, 255).astype('uint8')
+                display_grid[:, i * size: (i + 1) * size] = x  # Tile each filter into a horizontal grid
+
+            # -----------------
+            # Display the grid
+            # -----------------
+
+            scale = 20. / n_features
+            plt.figure(figsize=(scale * n_features, scale))
+            plt.title(layer_name)
+            plt.grid(False)
+            plt.imshow(display_grid, aspect='auto', cmap='viridis')
+    plt.show()
+
+
+def manual_balance_augmentation(images, labels):
+    print("test", Counter(labels))
+    parent_path = 'F:\\University\\Final Project\\dataset\\data-augmented\\'
+    parent_dirs = os.listdir(parent_path)
+    if len(parent_dirs) > 0:
+        new_dir_name = str(int(parent_dirs[len(parent_dirs) - 1]) + 1)
+    else:
+        new_dir_name = '0'
+
+    new_dir_path = os.path.join(parent_path, new_dir_name)
+    os.mkdir(new_dir_path)
+    class0_dir = os.path.join(new_dir_path, '0')
+    os.mkdir(class0_dir)
+    class1_dir = os.path.join(new_dir_path, '1')
+    os.mkdir(class1_dir)
+
+    image_number = -1
+    for i, image in enumerate(images):
+        if labels[i] == 0:
+            image_number += 1
+            cv2.imwrite(class0_dir + '\\' + str(image_number) + '.png', image)
+        else:
+            image_number += 1
+            cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png', image)
+
+            # image rotation
+            for angle in [-15, -10, 10, 15]:
+                image_number += 1
+                angle_radiance = angle / 180 * np.pi
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_rotation(image, angle_radiance))
+
+            # gamma correction
+            for gamma_value in [85, 90, 105, 110]:
+                image_number += 1
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_gamma_correction(image, gamma_value / 100))
+
+            # gaussian noise injection with mean 0 and variance 0.0025
+            for j in range(3):
+                image_number += 1
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_gaussian_noise_injection(image, 0, 0.0025) * 255)
+
+            # random translation within 0-10 pixels
+            for j in [(-5, -5), (-5, 0), (0, 5), (5, 5)]:
+                image_number += 1
+                width_shift, height_shift = j[0], j[1]
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.image_translation(image, width_shift, height_shift))
+
+            # zoom image
+            for scale_factor in [85, 90, 105, 110]:
+                image_number += 1
+                cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png',
+                            preprocessor.clipped_zoom(image, scale_factor / 100))
+
+    return new_dir_path
+
+
+def train_manual_dataset(x, y, model_name, input_shape, train_batch_size, num_epochs, fine_tune, manual_path=None):
+    if manual_path is None:
+        reduced_x, reduced_y = [], []
+        label_1_indexes = [i for i, val in enumerate(y) if val == 1]
+        number_of_new_class_1_images = 20 * len(label_1_indexes)
+        label_0_indexes = random.sample([i for i, val in enumerate(y) if val == 0], number_of_new_class_1_images)
+
+        reduced_x.extend([x[i] for i in label_1_indexes])
+        reduced_y.extend([y[i] for i in label_1_indexes])
+        reduced_x.extend([x[i] for i in label_0_indexes])
+        reduced_y.extend([y[i] for i in label_0_indexes])
+
+        manual_path = manual_balance_augmentation(reduced_x, reduced_y)
+
+    train_datagen = ImageDataGenerator(rescale=1. / 255, validation_split=0.2)
+    validation_datagen = ImageDataGenerator(rescale=1. / 255, validation_split=0.2)
+
+    seed = random.randint(1, 100)
+    train_generator = train_datagen.flow_from_directory(directory=manual_path,
+                                                        target_size=input_shape, color_mode='grayscale',
+                                                        class_mode='binary',
+                                                        batch_size=train_batch_size,
+                                                        shuffle=True,
+                                                        subset='training',
+                                                        seed=42)
+    validation_generator = validation_datagen.flow_from_directory(directory=manual_path,
+                                                                  target_size=input_shape, color_mode='grayscale',
+                                                                  class_mode='binary',
+                                                                  batch_size=train_batch_size // 4,
+                                                                  shuffle=True,
+                                                                  subset='validation',
+                                                                  seed=42)
+
+    model = model_name(input_shape)
+
+    history = model.fit(train_generator, epochs=num_epochs, validation_data=validation_generator,
+                        verbose=1)
+    # fine tuning
+    fine_tune_history = None
+    if fine_tune:
+        model = fine_tuning(model)
+        fine_tune_history = model.fit(train_generator, epochs=10, validation_data=validation_generator, verbose=1)
+
+    print('\n original result \n')
+    x, y = np.expand_dims(np.array(x), -1), np.expand_dims(np.array(y), -1)
+    model.evaluate(x, y, verbose=1)
+
+    history_metrics = ['loss', 'accuracy', 'precision', 'recall', 'auc', 'prc', 'tp', 'fp', 'tn', 'fn']
+    show_history(history, history_metrics, fine_tune_history)
+
+
+# based on the paper:
+# [1]S.-H. Wang et al., “Multiple Sclerosis Identification by 14-Layer Convolutional Neural Network With Batch Normalization, Dropout, and Stochastic Pooling,” Frontiers in Neuroscience, vol. 12, p. 818, 2018, doi: 10.3389/fnins.2018.00818.
+def CNN_model_14_layers(input_shape):
+    model = tf.keras.Sequential([
+        tf.keras.layers.InputLayer(input_shape=(input_shape[0], input_shape[1], 1)),
+
+        tf.keras.layers.Conv2D(8, (3, 3), padding='same', strides=2, name='Conv_1'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+
+        tf.keras.layers.MaxPooling2D((3, 3), strides=2, padding='same', name='Pool_1'),
+
+        tf.keras.layers.Conv2D(8, (3, 3), activation='relu', padding='same', strides=2, name='Conv_2'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+
+        tf.keras.layers.MaxPooling2D((3, 3), strides=2, padding='same', name='Pool_2'),
+        tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same', strides=1, name='Conv_3'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+        tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same', strides=1, name='Conv_4'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+        tf.keras.layers.Conv2D(16, (3, 3), activation='relu', padding='same', strides=1, name='Conv_5'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+
+        tf.keras.layers.MaxPooling2D((3, 3), strides=2, padding='same', name='Pool_3'),
+        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same', strides=1, name='Conv_6'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same', strides=1, name='Conv_7'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+        tf.keras.layers.Conv2D(32, (3, 3), activation='relu', padding='same', strides=1, name='Conv_8'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same', strides=1, name='Conv_9'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same', strides=1, name='Conv_10'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+        tf.keras.layers.Conv2D(64, (3, 3), activation='relu', padding='same', strides=1, name='Conv_11'),
+        tf.keras.layers.BatchNormalization(epsilon=1e-5),
+        tf.keras.layers.ReLU(),
+
+        tf.keras.layers.MaxPooling2D((3, 3), strides=2, padding='same', name='Pool_4'),
+
+        tf.keras.layers.Flatten(),
+
+        tf.keras.layers.Dense(20, activation='relu'),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(10),
+        tf.keras.layers.Dropout(0.5),
+        tf.keras.layers.Dense(2, activation='softmax'),
+    ])
+
+    model.compile(
+        optimizer=RMSprop(learning_rate=1e-4),
+        loss=tf.keras.losses.CategoricalCrossentropy(),
+        metrics=METRICS_CAT)
+
+    model.summary()
+    return model
+
+
+def hold_out_method(x, y, model_name, input_shape, output_dim, train_batch_size, augment_type, weighted_class, fine_tune,
+                    num_epochs, manual_augment_path=None):
+    x, y = np.array(x), np.array(y)
+
+    train_images, test_images, train_labels, test_labels = train_test_split(x, y, random_state=42, test_size=0.3)
+
+    train_model(train_images, test_images, None, train_labels, test_labels, None, model_name, input_shape, output_dim,
+                train_batch_size, augment_type, weighted_class, fine_tune, num_epochs, manual_augment_path)
