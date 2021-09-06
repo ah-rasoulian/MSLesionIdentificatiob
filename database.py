@@ -5,19 +5,45 @@ from brainmri import Patient
 import scipy.io
 import os
 import cv2
-import numpy
+import numpy as np
+import random
 
 
 class Database:
     def __init__(self, parent_dir):
         self.parent_dir = parent_dir
         self.samples = []
+        self.x = []
+        self.y = []
 
     def read_dataset(self):
         for item in sorted(os.listdir(self.parent_dir)):
             item_path = os.path.join(self.parent_dir, item)
             if os.path.isdir(item_path):
                 self.add_new_sample(item_path)
+
+    def read_images(self):
+        x, y = [], []
+        class_1_path = os.path.join(self.parent_dir, '1')
+        class_0_path = os.path.join(self.parent_dir, '0')
+
+        for new_image in os.listdir(class_1_path):
+            new_image_path = os.path.join(class_1_path, new_image)
+            x.append(cv2.imread(new_image_path, cv2.IMREAD_GRAYSCALE))
+            y.append(1)
+
+        for new_image in os.listdir(class_0_path):
+            new_image_path = os.path.join(class_0_path, new_image)
+            x.append(cv2.imread(new_image_path, cv2.IMREAD_GRAYSCALE))
+            y.append(0)
+
+        z = list(zip(x, y))
+        random.shuffle(z)
+
+        self.x, self.y = zip(*z)
+
+    def get_images_with_labels(self):
+        return np.array(self.x), np.array(self.y)
 
     def get_samples(self):
         return self.samples
@@ -46,9 +72,9 @@ class Database:
                 brain_mri: BrainMRI
                 for slice_mri in brain_mri.get_slices():
                     slice_mri: MRISlice
-                    blank = numpy.zeros(slice_mri.get_slice_image().shape[0:2])
+                    blank = np.zeros(slice_mri.get_slice_image().shape[0:2])
                     lesions_contour_marked_image = cv2.drawContours(blank.copy(), slice_mri.get_lesions(), -1, 1, -1)
-                    unique, counts = numpy.unique(lesions_contour_marked_image, return_counts=True)
+                    unique, counts = np.unique(lesions_contour_marked_image, return_counts=True)
                     total_number_of_lesions_pixels = dict(zip(unique, counts)).get(1, 0)
                     for patch in preprocessor.get_image_patches(slice_mri.get_slice_image(), patch_width, patch_height,
                                                                 horizontal_gap, vertical_gap):
@@ -57,19 +83,74 @@ class Database:
                                                 [patch.get_top_left_x() + patch_width,
                                                  patch.get_top_left_y() + patch_height],
                                                 [patch.get_top_left_x(), patch.get_top_left_y() + patch_height]]
-                        patch_contour = numpy.array(patch_contour_points).reshape((-1, 1, 2)).astype(numpy.int32)
+                        patch_contour = np.array(patch_contour_points).reshape((-1, 1, 2)).astype(np.int32)
                         patch_contour_marked_image = cv2.drawContours(blank.copy(), [patch_contour], -1, 1, -1)
 
-                        patch_lesion_intersection = numpy.logical_and(lesions_contour_marked_image,
+                        patch_lesion_intersection = np.logical_and(lesions_contour_marked_image,
                                                                       patch_contour_marked_image)
-                        unique, counts = numpy.unique(patch_lesion_intersection, return_counts=True)
+                        unique, counts = np.unique(patch_lesion_intersection, return_counts=True)
                         patch_number_of_lesions_pixels = dict(zip(unique, counts)).get(1, 0)
 
                         patches.append(patch.patch_image)
-                        if patch_number_of_lesions_pixels > total_number_of_lesions_pixels / 2 or patch_number_of_lesions_pixels >= (0.05 * patch_width * patch_height):
+                        if patch_number_of_lesions_pixels > total_number_of_lesions_pixels / 2 or patch_number_of_lesions_pixels >= (
+                                0.05 * patch_width * patch_height):
                             labels.append(1)
                         else:
                             labels.append(0)
+        return patches, labels
+
+    def get_patches_of_affected_slices_with_labels(self, patch_width, patch_height, horizontal_gap=1, vertical_gap=1):
+        patches = []
+        labels = []
+
+        for patient in self.samples:
+            patient: Patient
+            for brain_mri in patient.get_examinations():
+                brain_mri: BrainMRI
+                for slice_mri in brain_mri.get_slices():
+                    slice_mri: MRISlice
+                    if slice_mri.does_contain_lesion():
+                        blank = np.zeros(slice_mri.get_slice_image().shape[0:2])
+                        lesions_contour_marked_image = []
+                        total_number_of_lesions_pixels = []
+                        for lesion_id in range(len(slice_mri.get_lesions())):
+                            new_lesion_contour_marked_image = cv2.drawContours(blank.copy(), slice_mri.get_lesions(),
+                                                                               lesion_id, 1, -1)
+                            unique, counts = np.unique(new_lesion_contour_marked_image, return_counts=True)
+
+                            lesions_contour_marked_image.append(new_lesion_contour_marked_image)
+                            total_number_of_lesions_pixels.append(dict(zip(unique, counts)).get(1, 0))
+
+                        for patch in preprocessor.get_image_patches(slice_mri.get_slice_image(), patch_width,
+                                                                    patch_height,
+                                                                    horizontal_gap, vertical_gap):
+                            patch_contour_points = [[patch.get_top_left_x(), patch.get_top_left_y()],
+                                                    [patch.get_top_left_x() + patch_width, patch.get_top_left_y()],
+                                                    [patch.get_top_left_x() + patch_width,
+                                                     patch.get_top_left_y() + patch_height],
+                                                    [patch.get_top_left_x(), patch.get_top_left_y() + patch_height]]
+                            patch_contour = np.array(patch_contour_points).reshape((-1, 1, 2)).astype(np.int32)
+                            patch_contour_marked_image = cv2.drawContours(blank.copy(), [patch_contour], -1, 1, -1)
+
+                            does_patch_contain_lesion = False
+                            for lesion_contour_marked_id in range(len(lesions_contour_marked_image)):
+                                patch_lesion_intersection = np.logical_and(
+                                    lesions_contour_marked_image[lesion_contour_marked_id],
+                                    patch_contour_marked_image)
+
+                                unique, counts = np.unique(patch_lesion_intersection, return_counts=True)
+                                patch_number_of_lesions_pixels = dict(zip(unique, counts)).get(1, 0)
+
+                                if patch_number_of_lesions_pixels >= total_number_of_lesions_pixels[
+                                    lesion_contour_marked_id] / 2 or patch_number_of_lesions_pixels >= (
+                                        0.05 * patch_width * patch_height):
+                                    does_patch_contain_lesion = True
+                                    patches.append(patch.patch_image)
+                                    labels.append(1)
+                                    break
+                            if not does_patch_contain_lesion:
+                                patches.append(patch.patch_image)
+                                labels.append(0)
         return patches, labels
 
     def add_new_sample(self, sample_directory: str):
@@ -111,7 +192,7 @@ class Database:
                             _x = x[i][0] - transformed_x
                             _y = y[i][0] - transformed_y
                             lesion_points.append([_x, _y])
-                        lesion_contours = numpy.array(lesion_points).reshape((-1, 1, 2)).astype(numpy.int32)
+                        lesion_contours = np.array(lesion_points).reshape((-1, 1, 2)).astype(np.int32)
                         mri_slice.add_new_lesion(lesion_contours)
 
                 # adding the slice into brain MRI

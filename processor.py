@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.optimizers import RMSprop
+from tensorflow.keras.optimizers import Adam
 import matplotlib.pyplot as plt
 import math
 from collections import Counter
@@ -11,6 +12,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import preprocessor
 import os
 import random
+from database import Database
 
 METRICS = [
     tf.keras.metrics.BinaryAccuracy(name='accuracy'),
@@ -22,10 +24,6 @@ METRICS = [
     tf.keras.metrics.FalsePositives(name='fp'),
     tf.keras.metrics.TrueNegatives(name='tn'),
     tf.keras.metrics.FalseNegatives(name='fn'),
-]
-
-METRICS_CAT = [
-    tf.keras.metrics.Accuracy(name='accuracy'),
 ]
 
 
@@ -100,7 +98,8 @@ def stationary_wavelet_entropy_and_decision_tree_model(x, y):
 # A function that divides dataset into k parts, 70% for training - 20% for validation and 10% for test, whereas these ratios can change
 # Then loops over different folds and runs segmentation method on them.
 # k 10 , i = 0 , i-0.7
-def k_fold_cross_validation(x, y, k, model_name, input_shape, output_dim,train_batch_size, augment_type, weighted_class,
+def k_fold_cross_validation(x, y, k, model_name, input_shape, output_dim, train_batch_size, augment_type,
+                            weighted_class,
                             fine_tune, num_epochs, manual_augment_path=None):
     TRAIN_SIZE = 0.7
     VALIDATION_SIZE = 0.2
@@ -182,8 +181,9 @@ def show_history(history, metrics, fine_tune_history):
         val_metric = history.history['val_' + metric]
 
         if fine_tune_history is not None:
-            train_metric.extend(fine_tune_history.history[metric])
-            val_metric.extend(fine_tune_history.history['val_' + metric])
+            for new_history in fine_tune_history:
+                train_metric.extend(new_history.history[metric])
+                val_metric.extend(new_history.history['val_' + metric])
 
         epochs = np.arange(1, len(train_metric) + 1)
 
@@ -247,7 +247,8 @@ def train_model(train_images, validation_images, test_images, train_labels, vali
     validation_datagen.fit(validation_images)
     if output_dim == 2:
         validation_labels = tf.keras.utils.to_categorical(validation_labels)
-    validation_generator = validation_datagen.flow(validation_images, validation_labels)
+    validation_generator = validation_datagen.flow(validation_images, validation_labels,
+                                                   batch_size=max(1, train_batch_size // 4))
 
     # show_augmented_images(train_generator, 10)
 
@@ -261,14 +262,22 @@ def train_model(train_images, validation_images, test_images, train_labels, vali
 
     history = model.fit(train_generator, epochs=num_epochs, validation_data=validation_generator,
                         class_weight=class_weights,
-                        verbose=1)
+                        verbose=2)
     # fine tuning
     fine_tune_history = None
     if fine_tune:
+        if test_labels is not None:
+            if output_dim == 2:
+                test_labels = tf.keras.utils.to_categorical(test_labels)
+            for i in range(3):
+                model.fit(train_generator, epochs=1, validation_data=validation_generator,
+                          class_weight=class_weights,
+                          verbose=1)
+
         model = fine_tuning(model)
         fine_tune_history = model.fit(train_generator, epochs=10, validation_data=validation_generator,
                                       class_weight=class_weights,
-                                      verbose=1)
+                                      verbose=2)
 
     if test_labels is not None:
         if output_dim == 2:
@@ -365,13 +374,13 @@ def CNN_model_10_layers(input_shape):
         tf.keras.layers.Dense(100, name='FC_2'),
 
         tf.keras.layers.Dropout(0.5, name='Dropout_3'),
-        tf.keras.layers.Dense(2, name='FC_3', activation='softmax'),
+        tf.keras.layers.Dense(1, name='FC_3', activation='sigmoid'),
     ])
 
     model.compile(
         optimizer=RMSprop(learning_rate=1e-3),
-        loss=tf.keras.losses.categorical_crossentropy(),
-        metrics=METRICS_CAT)
+        loss=tf.keras.losses.binary_crossentropy(),
+        metrics=METRICS)
 
     model.summary()
     return model
@@ -381,20 +390,22 @@ def vgg_model(input_shape):
     inputs = tf.keras.layers.Input(shape=(input_shape[0], input_shape[1], 1))
     inputs = tf.keras.layers.Concatenate()([inputs, inputs, inputs])
 
-    vgg = tf.keras.applications.VGG16(include_top=False, weights='imagenet', input_tensor=inputs,
+    vgg = tf.keras.applications.VGG19(include_top=False, weights='imagenet', input_tensor=inputs,
                                       input_shape=(input_shape[0], input_shape[1], 3))
     for layer in vgg.layers:
         layer.trainable = False
 
     x = tf.keras.layers.GlobalAveragePooling2D()(vgg.output)
     x = tf.keras.layers.Dense(512, activation='relu')(x)
+    x = tf.keras.layers.Dropout(0.2)(x)
+    x = tf.keras.layers.Dense(256, activation='relu')(x)
     x = tf.keras.layers.Dropout(0.5)(x)
     x = tf.keras.layers.Dense(1, activation='sigmoid')(x)
 
     model = tf.keras.models.Model(vgg.input, x)
 
     model.compile(
-        optimizer=RMSprop(learning_rate=1e-3),
+        optimizer=RMSprop(learning_rate=1e-4),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
 
@@ -402,13 +413,23 @@ def vgg_model(input_shape):
     return model
 
 
-def fine_tuning(model):
+def fine_tuning(model, trainable_conv_layers):
     model.trainable = True
+    last_trainable_layer_id = 0
+    for i in range(len(model.layers) - 1, 0, -1):
+        if model.layers[i].name.__contains__('conv'):
+            trainable_conv_layers -= 1
+        if trainable_conv_layers == 0:
+            last_trainable_layer_id = i
+            break
+
+    for i in range(last_trainable_layer_id):
+        model.layers[i].trainable = False
+
     model.compile(
-        optimizer=RMSprop(learning_rate=5e-5),
+        optimizer=RMSprop(learning_rate=5e-6),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
-
     model.summary()
     return model
 
@@ -416,20 +437,22 @@ def fine_tuning(model):
 def resnet_model(input_shape):
     x = tf.keras.layers.Input(shape=(input_shape[0], input_shape[1], 1))
     x = tf.keras.layers.Concatenate()([x, x, x])
-    resnet = tf.keras.applications.ResNet50(input_tensor=x, include_top=False,
+    resnet = tf.keras.applications.ResNet50(input_tensor=x, include_top=False, weights='imagenet',
                                             input_shape=(input_shape[0], input_shape[1], 3))
     for layer in resnet.layers:
         layer.trainable = False
 
-    x = tf.keras.layers.Flatten()(resnet.output)
-    x = tf.keras.layers.Dense(1024, activation='relu')(x)
-    x = tf.keras.layers.Dropout(0.4)(x)
+    x = tf.keras.layers.GlobalAveragePooling2D()(resnet.output)
+    x = tf.keras.layers.Dense(512, activation='relu')(x)
+    x = tf.keras.layers.Dropout(0.2)(x)
+    x = tf.keras.layers.Dense(256, activation='relu')(x)
+    x = tf.keras.layers.Dropout(0.5)(x)
     x = tf.keras.layers.Dense(1, activation='sigmoid')(x)
 
     model = tf.keras.models.Model(resnet.input, x)
 
     model.compile(
-        optimizer=RMSprop(learning_rate=1e-3),
+        optimizer=RMSprop(learning_rate=1e-5),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
 
@@ -781,23 +804,131 @@ def CNN_model_14_layers(input_shape):
         tf.keras.layers.Dropout(0.5),
         tf.keras.layers.Dense(10),
         tf.keras.layers.Dropout(0.5),
-        tf.keras.layers.Dense(2, activation='softmax'),
+        tf.keras.layers.Dense(1, activation='sigmoid'),
     ])
 
     model.compile(
-        optimizer=RMSprop(learning_rate=1e-4),
-        loss=tf.keras.losses.CategoricalCrossentropy(),
-        metrics=METRICS_CAT)
+        optimizer=RMSprop(learning_rate=1e-2),
+        loss=tf.keras.losses.BinaryCrossentropy(),
+        metrics=METRICS)
 
     model.summary()
     return model
 
 
-def hold_out_method(x, y, model_name, input_shape, output_dim, train_batch_size, augment_type, weighted_class, fine_tune,
+def hold_out_method(x, y, model_name, input_shape, output_dim, train_batch_size, augment_type, weighted_class,
+                    fine_tune,
                     num_epochs, manual_augment_path=None):
     x, y = np.array(x), np.array(y)
 
-    train_images, test_images, train_labels, test_labels = train_test_split(x, y, random_state=42, test_size=0.3)
+    train_images, val_images, train_labels, val_labels = train_test_split(x, y, test_size=0.3)
+    validation_images, test_images, validation_labels, test_labels = train_test_split(val_images, val_labels,
+                                                                                      test_size=0.3)
 
-    train_model(train_images, test_images, None, train_labels, test_labels, None, model_name, input_shape, output_dim,
+    train_model(train_images, validation_images, test_images, train_labels, validation_labels, test_labels, model_name,
+                input_shape, output_dim,
                 train_batch_size, augment_type, weighted_class, fine_tune, num_epochs, manual_augment_path)
+
+
+def create_new_dataset(x, y, label_1_per_label_0):
+    reduced_x, reduced_y = [], []
+    label_1_indexes = [i for i, val in enumerate(y) if val == 1]
+    number_of_new_class_1_images = label_1_per_label_0 * len(label_1_indexes)
+    label_0_indexes = random.sample([i for i, val in enumerate(y) if val == 0], number_of_new_class_1_images)
+
+    reduced_x.extend([x[i] for i in label_1_indexes])
+    reduced_y.extend([y[i] for i in label_1_indexes])
+    reduced_x.extend([x[i] for i in label_0_indexes])
+    reduced_y.extend([y[i] for i in label_0_indexes])
+
+    parent_path = 'F:\\University\\Final Project\\dataset\\new_dataset\\'
+    parent_dirs = os.listdir(parent_path)
+    if len(parent_dirs) > 0:
+        new_dir_name = str(int(parent_dirs[len(parent_dirs) - 1]) + 1)
+    else:
+        new_dir_name = '0'
+
+    train_images, val_images, train_labels, val_labels = train_test_split(reduced_x, reduced_y, test_size=0.3,
+                                                                          stratify=reduced_y)
+    validation_images, test_images, validation_labels, test_labels = train_test_split(val_images, val_labels,
+                                                                                      test_size=0.3,
+                                                                                      stratify=val_labels)
+    new_dir_path = os.path.join(parent_path, new_dir_name)
+    os.mkdir(new_dir_path)
+
+    train_dir = os.path.join(new_dir_path, 'train')
+    os.mkdir(train_dir)
+    save_images(train_images, train_labels, train_dir)
+
+    validation_dir = os.path.join(new_dir_path, 'validation')
+    os.mkdir(validation_dir)
+    save_images(validation_images, validation_labels, validation_dir)
+
+    test_dir = os.path.join(new_dir_path, 'test')
+    os.mkdir(test_dir)
+    save_images(test_images, test_labels, test_dir)
+
+
+def save_images(images, labels, parent_path):
+    class0_dir = os.path.join(parent_path, '0')
+    os.mkdir(class0_dir)
+    class1_dir = os.path.join(parent_path, '1')
+    os.mkdir(class1_dir)
+    image_number = -1
+    for i, image in enumerate(images):
+        if labels[i] == 0:
+            image_number += 1
+            cv2.imwrite(class0_dir + '\\' + str(image_number) + '.png', image)
+        else:
+            image_number += 1
+            cv2.imwrite(class1_dir + '\\' + str(image_number) + '.png', image)
+
+
+def train_new_dataset(parent_path, model_name, fine_tune, num_epochs, fine_tune_epochs, fine_tune_trainable_conv_layers,
+                      input_shape, train_batch_size):
+    train_datagen = ImageDataGenerator(rescale=1. / 255,
+                                       rotation_range=15,
+                                       width_shift_range=5,
+                                       height_shift_range=5,
+                                       zoom_range=[0.8, 1.2],
+                                       preprocessing_function=preprocessor.random_augment
+                                       )
+    valid_datagen = ImageDataGenerator(rescale=1. / 255)
+    test_datagen = ImageDataGenerator(rescale=1. / 255)
+
+    train_generator = train_datagen.flow_from_directory(directory=os.path.join(parent_path, 'train'),
+                                                        color_mode='grayscale',
+                                                        class_mode='binary',
+                                                        target_size=input_shape,
+                                                        batch_size=train_batch_size,
+                                                        shuffle=True)
+
+    valid_generator = valid_datagen.flow_from_directory(directory=os.path.join(parent_path, 'validation'),
+                                                        color_mode='grayscale',
+                                                        class_mode='binary',
+                                                        target_size=input_shape,
+                                                        batch_size=max(1, train_batch_size // 4))
+
+    test_generator = test_datagen.flow_from_directory(directory=os.path.join(parent_path, 'test'),
+                                                      color_mode='grayscale',
+                                                      class_mode='binary',
+                                                      target_size=input_shape,
+                                                      batch_size=max(1, train_batch_size // 8))
+
+    model = model_name(input_shape)
+
+    history = model.fit(train_generator, epochs=num_epochs, validation_data=valid_generator, verbose=1)
+    # fine tuning
+    fine_tune_history = []
+    if fine_tune:
+        for i in range(1, fine_tune_trainable_conv_layers + 1):
+            model = fine_tuning(model, i)
+            fine_tune_history.append(
+                model.fit(train_generator, epochs=fine_tune_epochs, validation_data=valid_generator,
+                          verbose=1))
+
+    print('\ntest result:\n')
+    model.evaluate(test_generator, verbose=1)
+
+    history_metrics = ['loss', 'accuracy', 'precision', 'recall', 'auc', 'prc', 'tp', 'fp', 'tn', 'fn']
+    show_history(history, history_metrics, fine_tune_history)
