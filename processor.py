@@ -395,17 +395,15 @@ def vgg_model(input_shape):
     for layer in vgg.layers:
         layer.trainable = False
 
-    x = tf.keras.layers.GlobalAveragePooling2D()(vgg.output)
-    x = tf.keras.layers.Dense(512, activation='relu')(x)
-    x = tf.keras.layers.Dropout(0.2)(x)
+    x = tf.keras.layers.Flatten()(vgg.output)
     x = tf.keras.layers.Dense(256, activation='relu')(x)
-    x = tf.keras.layers.Dropout(0.5)(x)
+    x = tf.keras.layers.Dropout(0.4)(x)
     x = tf.keras.layers.Dense(1, activation='sigmoid')(x)
 
     model = tf.keras.models.Model(vgg.input, x)
 
     model.compile(
-        optimizer=RMSprop(learning_rate=1e-4),
+        optimizer=Adam(learning_rate=5e-4),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
 
@@ -427,7 +425,7 @@ def fine_tuning(model, trainable_conv_layers):
         model.layers[i].trainable = False
 
     model.compile(
-        optimizer=RMSprop(learning_rate=5e-6),
+        optimizer=Adam(learning_rate=1e-6),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
     model.summary()
@@ -538,11 +536,17 @@ def manual_augmentation(images, labels):
     return new_dir_path
 
 
-def show_augmented_images(generator, k):
-    for i in range(k):
+def show_augmented_images(generator, batches, per_batches, resize=None):
+    for i in range(batches):
         image, label = generator.next()
-        cv2.imshow('augmented samples', image[0, :, :, 0])
-        cv2.waitKey(0)
+        for j in range(per_batches):
+            if resize is not None:
+                out = cv2.resize(image[j, :, :, 0], resize)
+            else:
+                out = image[j, :, :, 0]
+            print(label[j])
+            cv2.imshow('augmented samples', out)
+            cv2.waitKey(0)
 
 
 def CNN_model_test(input_shape):
@@ -887,12 +891,15 @@ def save_images(images, labels, parent_path):
 def train_new_dataset(parent_path, model_name, fine_tune, num_epochs, fine_tune_epochs, fine_tune_trainable_conv_layers,
                       input_shape, train_batch_size):
     train_datagen = ImageDataGenerator(rescale=1. / 255,
-                                       rotation_range=15,
-                                       width_shift_range=5,
-                                       height_shift_range=5,
-                                       zoom_range=[0.8, 1.2],
-                                       preprocessing_function=preprocessor.random_augment
+                                       # rotation_range=90,
+                                       # width_shift_range=[-2, 2],
+                                       # height_shift_range=[-2, 2],
+                                       # horizontal_flip=True,
+                                       # vertical_flip=True,
+                                       # zoom_range=[0.95, 1.05],
+                                       # fill_mode='reflect',
                                        )
+
     valid_datagen = ImageDataGenerator(rescale=1. / 255)
     test_datagen = ImageDataGenerator(rescale=1. / 255)
 
@@ -902,6 +909,9 @@ def train_new_dataset(parent_path, model_name, fine_tune, num_epochs, fine_tune_
                                                         target_size=input_shape,
                                                         batch_size=train_batch_size,
                                                         shuffle=True)
+
+    # show_augmented_images(train_generator, 10, 100, (128, 128))
+    # return
 
     valid_generator = valid_datagen.flow_from_directory(directory=os.path.join(parent_path, 'validation'),
                                                         color_mode='grayscale',
@@ -916,16 +926,18 @@ def train_new_dataset(parent_path, model_name, fine_tune, num_epochs, fine_tune_
                                                       batch_size=max(1, train_batch_size // 8))
 
     model = model_name(input_shape)
-
-    history = model.fit(train_generator, epochs=num_epochs, validation_data=valid_generator, verbose=1)
+    callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
+    history = model.fit(train_generator, epochs=num_epochs, validation_data=valid_generator, callbacks=[callback]
+                        , verbose=1)
     # fine tuning
     fine_tune_history = []
     if fine_tune:
         for i in range(1, fine_tune_trainable_conv_layers + 1):
             model = fine_tuning(model, i)
+            callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
             fine_tune_history.append(
-                model.fit(train_generator, epochs=fine_tune_epochs, validation_data=valid_generator,
-                          verbose=1))
+                model.fit(train_generator, epochs=fine_tune_epochs, validation_data=valid_generator, callbacks=[callback]
+                          , verbose=1))
 
     print('\ntest result:\n')
     model.evaluate(test_generator, verbose=1)

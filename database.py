@@ -51,6 +51,7 @@ class Database:
     def get_all_slices_with_labels(self):
         slices = []
         labels = []
+        total_lesions = 0
         for patient in self.samples:
             patient: Patient
             for brian_mri in patient.get_examinations():
@@ -59,7 +60,9 @@ class Database:
                     slice_mri: MRISlice
                     slices.append(slice_mri.get_slice_image())
                     labels.append(slice_mri.does_contain_lesion())
+                    total_lesions += len(slice_mri.get_lesions())
 
+        print(total_lesions)
         return slices, labels
 
     def get_all_patches_with_labels(self, patch_width, patch_height, horizontal_gap=1, vertical_gap=1):
@@ -87,7 +90,7 @@ class Database:
                         patch_contour_marked_image = cv2.drawContours(blank.copy(), [patch_contour], -1, 1, -1)
 
                         patch_lesion_intersection = np.logical_and(lesions_contour_marked_image,
-                                                                      patch_contour_marked_image)
+                                                                   patch_contour_marked_image)
                         unique, counts = np.unique(patch_lesion_intersection, return_counts=True)
                         patch_number_of_lesions_pixels = dict(zip(unique, counts)).get(1, 0)
 
@@ -102,7 +105,7 @@ class Database:
     def get_patches_of_affected_slices_with_labels(self, patch_width, patch_height, horizontal_gap=1, vertical_gap=1):
         patches = []
         labels = []
-
+        number_of_slices_processed = 0
         for patient in self.samples:
             patient: Patient
             for brain_mri in patient.get_examinations():
@@ -132,7 +135,7 @@ class Database:
                             patch_contour = np.array(patch_contour_points).reshape((-1, 1, 2)).astype(np.int32)
                             patch_contour_marked_image = cv2.drawContours(blank.copy(), [patch_contour], -1, 1, -1)
 
-                            does_patch_contain_lesion = False
+                            total_patch_number_of_lesions = 0
                             for lesion_contour_marked_id in range(len(lesions_contour_marked_image)):
                                 patch_lesion_intersection = np.logical_and(
                                     lesions_contour_marked_image[lesion_contour_marked_id],
@@ -140,17 +143,19 @@ class Database:
 
                                 unique, counts = np.unique(patch_lesion_intersection, return_counts=True)
                                 patch_number_of_lesions_pixels = dict(zip(unique, counts)).get(1, 0)
+                                total_patch_number_of_lesions += patch_number_of_lesions_pixels
 
-                                if patch_number_of_lesions_pixels >= total_number_of_lesions_pixels[
-                                    lesion_contour_marked_id] / 2 or patch_number_of_lesions_pixels >= (
-                                        0.05 * patch_width * patch_height):
-                                    does_patch_contain_lesion = True
+                                if patch_number_of_lesions_pixels == total_number_of_lesions_pixels[lesion_contour_marked_id]:
                                     patches.append(patch.patch_image)
                                     labels.append(1)
                                     break
-                            if not does_patch_contain_lesion:
+                            if total_patch_number_of_lesions == 0:
                                 patches.append(patch.patch_image)
                                 labels.append(0)
+
+                        number_of_slices_processed += 1
+                        print(number_of_slices_processed)
+
         return patches, labels
 
     def add_new_sample(self, sample_directory: str):
