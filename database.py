@@ -102,6 +102,40 @@ class Database:
                             labels.append(0)
         return patches, labels
 
+    def get_lesions_sizes(self):
+        sizes = []
+        for patient in self.samples:
+            patient: Patient
+            for brain_mri in patient.get_examinations():
+                brain_mri: BrainMRI
+                for slice_mri in brain_mri.get_slices():
+                    slice_mri: MRISlice
+                    if slice_mri.does_contain_lesion():
+                        blank = np.zeros(slice_mri.get_slice_image().shape[0:2])
+                        for lesion_id in range(len(slice_mri.get_lesions())):
+                            new_lesion_contour_marked_image = cv2.drawContours(blank.copy(), slice_mri.get_lesions(),
+                                                                               lesion_id, 1, -1)
+                            unique, counts = np.unique(new_lesion_contour_marked_image, return_counts=True)
+
+                            sizes.append(dict(zip(unique, counts)).get(1, 0))
+
+        return sizes
+
+    def get_lesion_rectangle_dimensions(self):
+        heights, widths, areas = [], [], []
+        for patient in self.samples:
+            patient: Patient
+            for brain_mri in patient.get_examinations():
+                brain_mri: BrainMRI
+                for slice_mri in brain_mri.get_slices():
+                    for lesion in (slice_mri.get_lesions()):
+                        x, y, w, h = cv2.boundingRect(lesion)
+                        widths.append(w)
+                        heights.append(h)
+                        areas.append(h * w)
+
+        return heights, widths, areas
+
     def get_patches_of_affected_slices_with_labels(self, patch_width, patch_height, horizontal_gap=1, vertical_gap=1):
         patches = []
         labels = []
@@ -145,7 +179,8 @@ class Database:
                                 patch_number_of_lesions_pixels = dict(zip(unique, counts)).get(1, 0)
                                 total_patch_number_of_lesions += patch_number_of_lesions_pixels
 
-                                if patch_number_of_lesions_pixels == total_number_of_lesions_pixels[lesion_contour_marked_id]:
+                                if patch_number_of_lesions_pixels == total_number_of_lesions_pixels[
+                                    lesion_contour_marked_id]:
                                     patches.append(patch.patch_image)
                                     labels.append(1)
                                     break

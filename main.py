@@ -9,10 +9,8 @@ import cv2
 
 
 def main():
-    dataset_dir = "C:\Initial & repeat MRI in MS-Free Dataset"
-    # dataset_dir = "F:\\University\\Final Project\\dataset\\data-augmented\\3"
+    dataset_dir = "F:\\University\\Final Project\\dataset\\Initial & repeat MRI in MS-Free Dataset"
     database = Database(dataset_dir)
-
     # -----------------------------------------------------read dataset-----------------------------------------------------
     database.read_dataset()
     # database.read_images()
@@ -24,17 +22,27 @@ def main():
 
     # -----------------------------------------------------read x and y-----------------------------------------------------
     # x, y = database.get_all_patches_with_labels(32, 32, 16, 16)
-    x, y = database.get_all_slices_with_labels()
-    # x, y = database.get_patches_of_affected_slices_with_labels(32, 32, 4, 4)
+    # x, y = database.get_all_slices_with_labels()
+    # x, y = database.get_patches_of_affected_slices_with_labels(64, 64, 4, 4)
     # x, y = database.get_images_with_labels()
-    print(len(y))
-    print(Counter(y))
+    # print(len(y))
+    # print(Counter(y))
     # processor.create_new_dataset(x, y, 1)
     # processor.create_new_dataset(x, y, 2)
     # processor.create_new_dataset(x, y, 3)
     # -------------------------------------z---------------------------------------------------------------------------------
 
     # --------------------------------------------------train model---------------------------------------------------------
+    # processor.create_new_slices_dataset(x, y)
+    # processor.train_new_dataset(parent_path='F:\\University\\Final Project\\dataset\\previous_work_dataset',
+    #                             model_name=processor.CNN_model_14_layers,
+    #                             fine_tune=False,
+    #                             num_epochs=1000,
+    #                             fine_tune_epochs=0,
+    #                             fine_tune_trainable_conv_layers=0,
+    #                             input_shape=(256, 256),
+    #                             train_batch_size=64,
+    #                             evaluate_test=False)
     # processor.train_new_dataset(parent_path='F:\\University\\Final Project\\dataset\\new_dataset\\7',
     #                             model_name=processor.vgg_model,
     #                             fine_tune=True,
@@ -42,7 +50,8 @@ def main():
     #                             fine_tune_epochs=100,
     #                             fine_tune_trainable_conv_layers=3,
     #                             input_shape=(32, 32),
-    #                             train_batch_size=1024)
+    #                             train_batch_size=1024,
+    #                             evaluate_test=True)
     #     processor.k_fold_cross_validation(x, y, 10, processor.resnet_model, (64, 64), 1200, 0, True, True)
 
     # processor.k_fold_cross_validation(x, y, k=10, model_name=processor.resnet_model,
@@ -97,7 +106,8 @@ def main():
     #                 cv2.imshow("preprocessed", x)
     #                 cv2.waitKey(0)
     # # ----------------------------------------------------------------------------------------------------------------------
-
+    widths, heights, areas = database.get_lesion_rectangle_dimensions()
+    visualizer.draw_lesion_rect_histogram(widths, heights)
     # ------------------------------------------visualize slice with lesions------------------------------------------------
     #     for patient in database.get_samples():
     #         for examination in patient.get_examinations():
@@ -105,6 +115,7 @@ def main():
     # visualizer.show_sample_total_brain_mri(database.get_samples()[0].get_examinations()[0])
     # visualizer.show_slices_with_and_without_lesion(database.get_samples()[0].get_examinations()[0])
     # visualizer.clarify_slice_contour(database.get_samples()[0].get_examinations()[0].get_slices()[7])
+    # visualizer.show_data_augmented(database.get_samples()[0].get_examinations()[0].get_slices()[7])
 #
 # ----------------------------------------------------------------------------------------------------------------------
 

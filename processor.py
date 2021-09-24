@@ -378,8 +378,8 @@ def CNN_model_10_layers(input_shape):
     ])
 
     model.compile(
-        optimizer=RMSprop(learning_rate=1e-3),
-        loss=tf.keras.losses.binary_crossentropy(),
+        optimizer=RMSprop(learning_rate=1e-4),
+        loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
 
     model.summary()
@@ -460,8 +460,7 @@ def resnet_model(input_shape):
 
 # produce 150 images per training image via scaling, noise addition, gamma correction, translation and rotation based on the paper:
 # [1]Y.-D. Zhang, C. Pan, J. Sun, and C. Tang, “Multiple sclerosis identification by convolutional neural network with dropout and parametric ReLU,” Journal of Computational Science, vol. 28, pp. 1–10, Sep. 2018, doi: 10.1016/j.jocs.2018.07.003.
-def manual_augmentation(images, labels):
-    parent_path = 'F:\\University\\Final Project\\dataset\\data-augmented\\'
+def manual_augmentation(images, labels, parent_path='F:\\University\\Final Project\\dataset\\data-augmented\\'):
     parent_dirs = os.listdir(parent_path)
     if len(parent_dirs) > 0:
         new_dir_name = str(int(parent_dirs[len(parent_dirs) - 1]) + 1)
@@ -512,9 +511,9 @@ def manual_augmentation(images, labels):
         for j in np.random.randint(-100, 100, 30):
             image_number += 1
             if j < 0:
-                width_shift, height_shift = -(-i // 10), -(-i % 10)
+                width_shift, height_shift = -(-j // 10), -(-j % 10)
             else:
-                width_shift, height_shift = i // 10, i % 10
+                width_shift, height_shift = j // 10, j % 10
 
             if labels[i] == 0:
                 cv2.imwrite(class0_dir + '\\' + str(image_number) + '.png',
@@ -812,7 +811,7 @@ def CNN_model_14_layers(input_shape):
     ])
 
     model.compile(
-        optimizer=RMSprop(learning_rate=1e-2),
+        optimizer=RMSprop(learning_rate=1e-4),
         loss=tf.keras.losses.BinaryCrossentropy(),
         metrics=METRICS)
 
@@ -832,6 +831,26 @@ def hold_out_method(x, y, model_name, input_shape, output_dim, train_batch_size,
     train_model(train_images, validation_images, test_images, train_labels, validation_labels, test_labels, model_name,
                 input_shape, output_dim,
                 train_batch_size, augment_type, weighted_class, fine_tune, num_epochs, manual_augment_path)
+
+
+def create_new_slices_dataset(x, y):
+    reduced_x, reduced_y = [], []
+    label_1_indexes = [i for i, val in enumerate(y) if val == 1][:-1]
+    label_0_indexes = random.sample([i for i, val in enumerate(y) if val == 0], 681)
+
+    reduced_x.extend([x[i] for i in label_1_indexes])
+    reduced_y.extend([y[i] for i in label_1_indexes])
+    reduced_x.extend([x[i] for i in label_0_indexes])
+    reduced_y.extend([y[i] for i in label_0_indexes])
+
+    reduced_x, reduced_y = np.array(reduced_x), np.array(reduced_y)
+
+    train_images, val_images, train_labels, val_labels = train_test_split(reduced_x, reduced_y, test_size=679, train_size=678, stratify=reduced_y, random_state=42)
+
+    print('train', Counter(train_labels))
+    print('label', Counter(val_labels))
+    manual_augmentation(train_images, train_labels, parent_path='F:\\University\\Final Project\\dataset\\previous_work_dataset\\train')
+    save_images(val_images, val_labels, parent_path='F:\\University\\Final Project\\dataset\\previous_work_dataset\\validation')
 
 
 def create_new_dataset(x, y, label_1_per_label_0):
@@ -889,7 +908,7 @@ def save_images(images, labels, parent_path):
 
 
 def train_new_dataset(parent_path, model_name, fine_tune, num_epochs, fine_tune_epochs, fine_tune_trainable_conv_layers,
-                      input_shape, train_batch_size):
+                      input_shape, train_batch_size, evaluate_test):
     train_datagen = ImageDataGenerator(rescale=1. / 255,
                                        # rotation_range=90,
                                        # width_shift_range=[-2, 2],
@@ -901,7 +920,8 @@ def train_new_dataset(parent_path, model_name, fine_tune, num_epochs, fine_tune_
                                        )
 
     valid_datagen = ImageDataGenerator(rescale=1. / 255)
-    test_datagen = ImageDataGenerator(rescale=1. / 255)
+    if evaluate_test is True:
+        test_datagen = ImageDataGenerator(rescale=1. / 255)
 
     train_generator = train_datagen.flow_from_directory(directory=os.path.join(parent_path, 'train'),
                                                         color_mode='grayscale',
@@ -919,11 +939,12 @@ def train_new_dataset(parent_path, model_name, fine_tune, num_epochs, fine_tune_
                                                         target_size=input_shape,
                                                         batch_size=max(1, train_batch_size // 4))
 
-    test_generator = test_datagen.flow_from_directory(directory=os.path.join(parent_path, 'test'),
-                                                      color_mode='grayscale',
-                                                      class_mode='binary',
-                                                      target_size=input_shape,
-                                                      batch_size=max(1, train_batch_size // 8))
+    if evaluate_test is True:
+        test_generator = test_datagen.flow_from_directory(directory=os.path.join(parent_path, 'test'),
+                                                          color_mode='grayscale',
+                                                          class_mode='binary',
+                                                          target_size=input_shape,
+                                                          batch_size=max(1, train_batch_size // 8))
 
     model = model_name(input_shape)
     callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
@@ -939,8 +960,9 @@ def train_new_dataset(parent_path, model_name, fine_tune, num_epochs, fine_tune_
                 model.fit(train_generator, epochs=fine_tune_epochs, validation_data=valid_generator, callbacks=[callback]
                           , verbose=1))
 
-    print('\ntest result:\n')
-    model.evaluate(test_generator, verbose=1)
+    if evaluate_test is True:
+        print('\ntest result:\n')
+        model.evaluate(test_generator, verbose=1)
 
     history_metrics = ['loss', 'accuracy', 'precision', 'recall', 'auc', 'prc', 'tp', 'fp', 'tn', 'fn']
     show_history(history, history_metrics, fine_tune_history)
