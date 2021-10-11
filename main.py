@@ -12,10 +12,10 @@ def main():
     dataset_dir = "F:\\University\\Final Project\\dataset\\Initial & repeat MRI in MS-Free Dataset"
     database = Database(dataset_dir)
     # -----------------------------------------------------read dataset-----------------------------------------------------
-    database.read_dataset()
+    # database.read_dataset()
     # database.read_images()
     # database.add_new_sample("F://University/Final Project/dataset/Initial & repeat MRI in MS-Free Dataset/AA")
-    # database.add_new_sample("F://University/Final Project/dataset/refined_dataset/ARK")
+    database.add_new_sample("F://University/Final Project/dataset/refined_dataset/ARK")
     # database.add_new_sample("F://University/Final Project/dataset/refined_dataset/AT")
     # database.add_new_sample("F://University/Final Project/dataset/refined_dataset/CHEM")
     # ----------------------------------------------------------------------------------------------------------------------
@@ -106,16 +106,23 @@ def main():
     #                 cv2.imshow("preprocessed", x)
     #                 cv2.waitKey(0)
     # # ----------------------------------------------------------------------------------------------------------------------
-    widths, heights, areas = database.get_lesion_rectangle_dimensions()
-    visualizer.draw_lesion_rect_histogram(widths, heights)
+
     # ------------------------------------------visualize slice with lesions------------------------------------------------
-    #     for patient in database.get_samples():
-    #         for examination in patient.get_examinations():
-    #             visualizer.show_brain_mri(examination)
+    for patient in database.get_samples():
+        for examination in patient.get_examinations():
+            visualizer.show_brain_mri(examination)
     # visualizer.show_sample_total_brain_mri(database.get_samples()[0].get_examinations()[0])
     # visualizer.show_slices_with_and_without_lesion(database.get_samples()[0].get_examinations()[0])
     # visualizer.clarify_slice_contour(database.get_samples()[0].get_examinations()[0].get_slices()[7])
     # visualizer.show_data_augmented(database.get_samples()[0].get_examinations()[0].get_slices()[7])
+    # widths, heights, areas = database.get_lesion_rectangle_dimensions()
+    # visualizer.draw_lesion_rect_histogram(widths, heights)
+    # visualizer.show_patching_example(database.get_samples()[0].get_examinations()[0].get_slices()[7])
+    # visualizer.show_lesion_between_patches(database.get_samples()[0].get_examinations()[0].get_slices()[7])
+    # visualizer.show_labeling_example(database.get_samples()[0].get_examinations()[0].get_slices()[7])
+    # visualizer.show_least_sized_rectangle(database.get_samples()[0].get_examinations()[0].get_slices()[21])
+    # visualizer.make_background_white(database.get_samples()[0].get_examinations()[0].get_slices()[21].get_slice_image())
+
 #
 # ----------------------------------------------------------------------------------------------------------------------
 

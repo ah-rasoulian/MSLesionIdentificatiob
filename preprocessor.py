@@ -290,8 +290,8 @@ def get_least_sized_image_encompassing_brain(original_slice, offset):
 
 def pre_processing(original_slice):
     # no_skull = skull_stripping_1(original_slice)
-    return get_least_sized_image_encompassing_brain(original_slice, 16)
-    # return original_slice, 0, 0
+    # return get_least_sized_image_encompassing_brain(original_slice, 16)
+    return original_slice, 0, 0
 
 
 def image_rotation(image, angle):

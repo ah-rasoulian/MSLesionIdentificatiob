@@ -22,8 +22,8 @@ def show_single_slice(slice_mri: MRISlice, slice_number, total_slices_number, wi
                 0.8, (255, 0, 255), 1)
 
     # typing the slice number over total slices
-    cv2.putText(result_image, slice_number.__str__() + " / " + total_slices_number.__str__(),
-                (width // 40, 6 * height // 10), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255, 0, 255), 1)
+    # cv2.putText(result_image, slice_number.__str__() + " / " + total_slices_number.__str__(),
+    #             (width // 40, 6 * height // 10), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255, 0, 255), 1)
 
     # drawing lesions contours if it is needed
     if with_lesions:
@@ -177,6 +177,160 @@ def clarify_slice_contour(slice_mri: MRISlice):
     plt.show()
 
 
+def show_patching_example(slice_mri: MRISlice):
+    width, height = 36, 36
+    width_gap, height_gap = 4, 4
+    fig = plt.figure()
+    gs1 = gridspec.GridSpec(2, 4)
+
+    lesion_marked_image = cv2.drawContours(cv2.cvtColor(slice_mri.get_slice_image(), cv2.COLOR_GRAY2BGR),
+                                           slice_mri.get_lesions(),
+                                           -1, (255, 0, 0), -1)
+
+    x, y, w, h = cv2.boundingRect(slice_mri.get_lesions()[0])
+
+    x, y = x + w // 2 - width // 2, y + h // 2 - height // 2
+
+    original_image = cv2.resize(lesion_marked_image[y: y + height, x: x + width], (10 * width, 10 * height))
+
+    original_image = cv2.rectangle(original_image, (0, 0), (320, 320), (0, 255, 0), 1)
+    original_image = cv2.rectangle(original_image, (0, 40), (320, 360), (0, 255, 0), 1)
+    original_image = cv2.rectangle(original_image, (40, 0), (360, 320), (0, 255, 0), 1)
+    original_image = cv2.rectangle(original_image, (40, 40), (360, 360), (0, 255, 0), 1)
+
+    ax1 = fig.add_subplot(gs1[0, 1:3])
+    ax1.imshow(original_image)
+    ax1.axis('off')
+    ax1.set_aspect('equal')
+    ax1.set_title('آ', color='black', y=-0.15, x=0.5, fontsize=14)
+
+    image_number = 0
+    labels = ['ب', 'پ', 'ت', 'ث']
+    for j in range(y, y + height - 32 + 1, height_gap):
+        for i in range(x, x + width - 32 + 1, width_gap):
+            ax = fig.add_subplot(gs1[1, image_number])
+            image = cv2.resize(lesion_marked_image[j: j + 32, i: i + 32], (10 * 32, 10 * 32))
+            ax.imshow(image)
+            ax.axis('off')
+            ax.set_aspect('equal')
+            ax.set_title(labels[3 - image_number], color='black', y=-0.25, x=0.5, fontsize=14)
+            image_number += 1
+
+    plt.subplots_adjust(left=0, bottom=0, top=1, right=1, wspace=0.1, hspace=0)
+    plt.show()
+
+
+def show_lesion_between_patches(slice_mri: MRISlice):
+    width, height = 64, 32
+    width_gap, height_gap = 32, 32
+    fig = plt.figure()
+    gs1 = gridspec.GridSpec(2, 4)
+
+    lesion_marked_image = cv2.drawContours(cv2.cvtColor(slice_mri.get_slice_image(), cv2.COLOR_GRAY2BGR),
+                                           slice_mri.get_lesions(),
+                                           -1, (255, 0, 0), -1)
+
+    x, y, w, h = cv2.boundingRect(slice_mri.get_lesions()[0])
+
+    x, y = x + w // 2 - width // 2, y + h // 2 - height // 2
+
+    original_image = cv2.resize(lesion_marked_image[y: y + height, x: x + width], (10 * width, 10 * height))
+
+    original_image = cv2.rectangle(original_image, (0, 0), (320, 320), (0, 255, 0), 5)
+    original_image = cv2.rectangle(original_image, (320, 0), (640, 320), (0, 255, 0), 5)
+
+    ax1 = fig.add_subplot(gs1[0, 1:3])
+    ax1.imshow(original_image)
+    ax1.axis('off')
+    ax1.set_aspect('equal')
+    ax1.set_title('آ', color='black', y=-0.25, x=0.5, fontsize=14)
+
+    image_number = 0
+    labels = ['پ', 'ب', 'ت', 'ث']
+    for j in range(y, y + height - 32 + 1, height_gap):
+        for i in range(x, x + width - 32 + 1, width_gap):
+            ax = fig.add_subplot(gs1[1, 1 + image_number])
+            image = cv2.resize(lesion_marked_image[j: j + 32, i: i + 32], (10 * 32, 10 * 32))
+            ax.imshow(image)
+            ax.axis('off')
+            ax.set_aspect('equal')
+            ax.set_title(labels[image_number], color='black', y=-0.25, x=0.5, fontsize=14)
+            image_number += 1
+
+    plt.subplots_adjust(left=0, bottom=0, top=1, right=1, wspace=0.1, hspace=0)
+    plt.show()
+
+
+def show_labeling_example(slice_mri: MRISlice):
+    lesion_marked_image = cv2.drawContours(cv2.cvtColor(slice_mri.get_slice_image(), cv2.COLOR_GRAY2BGR),
+                                           slice_mri.get_lesions(),
+                                           -1, (255, 0, 0), 2)
+
+    x, y, w, h = cv2.boundingRect(slice_mri.get_lesions()[0])
+    patch_contour_1 = [[x, y], [x + 32, y], [x + 32, y + 32], [x, y + 32]]
+    patch_contour_1 = np.array(patch_contour_1).reshape((-1, 1, 2)).astype(np.int32)
+    patch_marked_image = cv2.drawContours(lesion_marked_image.copy(), [patch_contour_1], -1, (0, 255, 0), 2)
+
+    patch_contour_2 = [[x + 96, y - 96], [x + 128, y - 96], [x + 128, y - 64], [x + 96, y - 64]]
+    patch_contour_2 = np.array(patch_contour_2).reshape((-1, 1, 2)).astype(np.int32)
+    patch_marked_image2 = cv2.drawContours(lesion_marked_image.copy(), [patch_contour_2], -1, (0, 255, 0), 2)
+    blank = np.zeros(slice_mri.get_slice_image().shape[0:2])
+
+    fig = plt.figure(figsize=(10, 10))
+    gs = gridspec.GridSpec(2, 1, hspace=0.2)
+
+    gs1 = gridspec.GridSpecFromSubplotSpec(4, 3, subplot_spec=gs[0])
+    gs2 = gridspec.GridSpecFromSubplotSpec(4, 3, subplot_spec=gs[1])
+
+    ax_in1_1 = plt.subplot(gs1[1:3, 0])
+    ax_in1_1.imshow(patch_marked_image)
+    ax_in1_1.axis('off')
+    ax_in1_1.set_aspect('equal')
+
+    ax_in1_2 = plt.subplot(gs1[0:2, 1])
+    lesion_image = cv2.drawContours(blank.copy(), slice_mri.get_lesions(), -1, 1, -1)
+    ax_in1_2.imshow(lesion_image, cmap='gray')
+    ax_in1_2.axis('off')
+    ax_in1_2.set_aspect('equal')
+
+    ax_in1_3 = plt.subplot(gs1[2:4, 1])
+    patch_image = cv2.drawContours(blank.copy(), [patch_contour_1], -1, 1, -1)
+    ax_in1_3.imshow(patch_image, cmap='gray')
+    ax_in1_3.axis('off')
+    ax_in1_3.set_aspect('equal')
+
+    ax_in1_4 = plt.subplot(gs1[1:3, 2])
+    patch_lesion_intersection = np.logical_and(lesion_image, patch_image)
+    ax_in1_4.imshow(patch_lesion_intersection, cmap='gray')
+    ax_in1_4.axis('off')
+    ax_in1_4.set_aspect('equal')
+
+    ax_in2_1 = plt.subplot(gs2[1:3, 0])
+    ax_in2_1.imshow(patch_marked_image2)
+    ax_in2_1.axis('off')
+    ax_in2_1.set_aspect('equal')
+
+    ax_in2_2 = plt.subplot(gs2[0:2, 1])
+    lesion_image = cv2.drawContours(blank.copy(), slice_mri.get_lesions(), -1, 1, -1)
+    ax_in2_2.imshow(lesion_image, cmap='gray')
+    ax_in2_2.axis('off')
+    ax_in2_2.set_aspect('equal')
+
+    ax_in2_3 = plt.subplot(gs2[2:4, 1])
+    patch_image = cv2.drawContours(blank.copy(), [patch_contour_2], -1, 1, -1)
+    ax_in2_3.imshow(patch_image, cmap='gray')
+    ax_in2_3.axis('off')
+    ax_in2_3.set_aspect('equal')
+
+    ax_in2_4 = plt.subplot(gs2[1:3, 2])
+    patch_lesion_intersection = np.logical_and(lesion_image, patch_image)
+    ax_in2_4.imshow(patch_lesion_intersection, cmap='gray')
+    ax_in2_4.axis('off')
+    ax_in2_4.set_aspect('equal')
+
+    plt.show()
+
+
 def show_data_augmented(slice_mri: MRISlice):
     image = slice_mri.get_slice_image()
     # rotation
@@ -254,4 +408,33 @@ def draw_lesion_rect_histogram(widths, heights):
 
     ax.set_xlabel('width')
     ax.set_ylabel('height')
+    plt.show()
+
+
+def show_least_sized_rectangle(slice_mri: MRISlice):
+    plt.figure(figsize=(4, 8))
+    least_size_image = preprocessor.get_least_sized_image_encompassing_brain(slice_mri.get_slice_image(), 0)[0]
+    gs1 = gridspec.GridSpec(1, 2, width_ratios=[least_size_image.shape[1], slice_mri.get_slice_image().shape[1]])
+
+    ax1 = plt.subplot(gs1[1])
+    plt.axis('off')
+    ax1.set_aspect('equal')
+    ax1.set_title('آ', color='black', y=-0.2, x=0.5, fontsize=14)
+    ax1.imshow(slice_mri.get_slice_image(), cmap='gray')
+
+    ax2 = plt.subplot(gs1[0])
+    plt.axis('off')
+    ax2.set_aspect('equal')
+    ax2.set_title('ب', color='black', y=-0.55, x=0.5, fontsize=14)
+    ax2.imshow(least_size_image, cmap='gray')
+
+    # plt.subplots_adjust(left=0.1, bottom=0.1, top=1, right=1, wspace=0.01, hspace=0.2)
+    plt.show()
+
+
+def make_background_white(image):
+    white_bg = image.copy()
+    white_bg[white_bg < 20] = 255
+
+    plt.imshow(white_bg, cmap='gray')
     plt.show()
