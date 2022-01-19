@@ -1,3 +1,3 @@
-# MSLesionSegmentator
-A two-layer machine leaning program,
-first to detect whether an MRI slice contatins a lesion based on different deep networks and, second to locate lesions using convolutional neural network.
+# MSLesionIdentification
+
+A program which divides T2-weighted MRI slices into overlapping patches, and it detects whether a patch encompasses an MS lesion using deep learning, VGG net, and transfer learning.
